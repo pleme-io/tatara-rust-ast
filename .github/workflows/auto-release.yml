@@ -1,0 +1,29 @@
+# Auto-release shim for the macro-farm engine itself.
+#
+# Per the ★★ AUTO-RELEASE directive, every packaged pleme-io artifact
+# ships to its upstream registry automatically on merge. tatara-rust-ast
+# is a 16-crate Rust workspace; member crates publish to crates.io
+# via substrate's rust-auto-release reusable workflow.
+#
+# The engine eats its own dog food: it's a Rust workspace that
+# generates publishable Rust crates, so it ships through the same
+# AUTO-RELEASE pipeline its emitted crates do.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      bump-type:
+        description: "patch | minor | major"
+        required: false
+        default: patch
+
+jobs:
+  release:
+    uses: pleme-io/substrate/.github/workflows/rust-auto-release.yml@main
+    with:
+      bump-type: ${{ inputs.bump-type || 'patch' }}
+      source-paths: "Cargo.toml Cargo.lock crates"
+      add-paths: "Cargo.toml Cargo.lock crates"
+    secrets: inherit

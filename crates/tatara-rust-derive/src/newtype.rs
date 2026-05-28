@@ -141,6 +141,7 @@ fn render_lib_rs(spec: &NewtypeDeriveSpec) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tatara_rust_snapshot::assert_tokens_contain;
 
     fn impl_from() -> NewtypeDeriveSpec {
         NewtypeDeriveSpec {
@@ -201,27 +202,33 @@ mod tests {
     fn lib_rs_emits_derive_fn_with_unnamed_field_extraction() {
         let scaffold = impl_from().compile_to_crate("impl-from-derive").unwrap();
         let lib = scaffold.to_files().get("src/lib.rs").unwrap().clone();
-        assert!(lib.contains("#[proc_macro_derive(ImplFrom)]"));
-        assert!(lib.contains("pub fn derive_impl_from"));
-        assert!(lib.contains("Fields::Unnamed"));
-        assert!(lib.contains("u.unnamed.first()"));
+        assert_tokens_contain!(&lib, "#[proc_macro_derive(ImplFrom)]");
+        assert_tokens_contain!(&lib, "pub fn derive_impl_from");
+        assert_tokens_contain!(&lib, "Fields::Unnamed");
+        assert_tokens_contain!(&lib, "u.unnamed.first()");
     }
 
     #[test]
     fn lib_rs_embeds_template_under_quote() {
         let scaffold = impl_from().compile_to_crate("impl-from-derive").unwrap();
         let lib = scaffold.to_files().get("src/lib.rs").unwrap().clone();
-        assert!(lib.contains("#self_name"));
-        assert!(lib.contains("#inner_ty"));
-        assert!(lib.contains("From<#inner_ty> for #self_name"));
+        assert_tokens_contain!(&lib, "#self_name");
+        assert_tokens_contain!(&lib, "#inner_ty");
+        assert_tokens_contain!(&lib, "From<#inner_ty> for #self_name");
     }
 
     #[test]
     fn lib_rs_rejects_non_tuple_with_typed_error() {
         let scaffold = impl_from().compile_to_crate("impl-from-derive").unwrap();
         let lib = scaffold.to_files().get("src/lib.rs").unwrap().clone();
-        assert!(lib.contains("NewtypeDerive requires a single-tuple-field struct"));
-        assert!(lib.contains("syn::Error::new_spanned"));
+        // The error message is a string literal in the emitted code —
+        // assert on its quoted form so canonical_tokens parses it as
+        // a single Literal token (not as hyphen-separated idents).
+        assert_tokens_contain!(
+            &lib,
+            r#""NewtypeDerive requires a single-tuple-field struct: `pub struct W(Inner);`""#
+        );
+        assert_tokens_contain!(&lib, "syn :: Error :: new_spanned");
     }
 
     #[test]
@@ -230,8 +237,14 @@ mod tests {
             let crate_name = format!("{}-derive", spec.trait_name.0.to_lowercase());
             let scaffold = spec.compile_to_crate(&crate_name).unwrap();
             let lib = scaffold.to_files().get("src/lib.rs").unwrap().clone();
-            assert!(lib.contains("#[proc_macro_derive"), "{crate_name}: missing proc_macro_derive");
-            assert!(lib.contains("#self_name"), "{crate_name}: missing #self_name splice");
+            // Token-stable contract: must declare a proc-macro derive
+            // and use #self_name as the type interpolation marker.
+            // Fragments must be balanced syntax — interpolate the
+            // spec's trait name instead of using a hanging bracket.
+            let trait_name = &spec.trait_name.0;
+            let expected_attr = format!("#[proc_macro_derive({trait_name})]");
+            assert_tokens_contain!(&lib, &expected_attr);
+            assert_tokens_contain!(&lib, "#self_name");
         }
     }
 

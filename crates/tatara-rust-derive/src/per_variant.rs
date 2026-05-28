@@ -183,6 +183,7 @@ fn render_lib_rs(spec: &PerVariantDeriveSpec) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tatara_rust_snapshot::assert_tokens_contain;
 
     fn is_variant() -> PerVariantDeriveSpec {
         PerVariantDeriveSpec {
@@ -207,26 +208,29 @@ mod tests {
     fn lib_rs_walks_enum_variants() {
         let s = is_variant().compile_to_crate("v").unwrap();
         let lib = s.to_files().get("src/lib.rs").unwrap().clone();
-        assert!(lib.contains("Data::Enum(DataEnum"));
-        assert!(lib.contains("variants.iter()"));
-        assert!(lib.contains("variant_shape_arm"));
-        assert!(lib.contains("#[proc_macro_derive(IsVariant)]"));
+        // assert_tokens_contain! parses both sides — fragments must
+        // be balanced syntax pieces. Use full Data::Enum(DataEnum { … })
+        // shape instead of an unbalanced prefix.
+        assert_tokens_contain!(&lib, "Data::Enum(DataEnum { variants, .. }) => variants");
+        assert_tokens_contain!(&lib, "variants.iter()");
+        assert_tokens_contain!(&lib, "variant_shape_arm");
+        assert_tokens_contain!(&lib, "#[proc_macro_derive(IsVariant)]");
     }
 
     #[test]
     fn shape_arm_handles_all_variant_kinds() {
         let s = is_variant().compile_to_crate("v").unwrap();
         let lib = s.to_files().get("src/lib.rs").unwrap().clone();
-        assert!(lib.contains("Fields::Named(_)"));
-        assert!(lib.contains("Fields::Unnamed(_)"));
-        assert!(lib.contains("Fields::Unit"));
+        assert_tokens_contain!(&lib, "Fields::Named(_)");
+        assert_tokens_contain!(&lib, "Fields::Unnamed(_)");
+        assert_tokens_contain!(&lib, "Fields::Unit");
     }
 
     #[test]
     fn method_ident_binding_when_template_set() {
         let s = is_variant().compile_to_crate("v").unwrap();
         let lib = s.to_files().get("src/lib.rs").unwrap().clone();
-        assert!(lib.contains("format_ident!"));
+        assert_tokens_contain!(&lib, "format_ident!");
         assert!(lib.contains("\"is_{}\""));
     }
 
