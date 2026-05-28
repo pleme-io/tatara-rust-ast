@@ -91,6 +91,14 @@ pub fn apply_to_source(src: &str, cand: &RefactorCandidate) -> Result<String, Ap
                         Some(p) if p == cand.pattern => false,
                         _ => true,
                     },
+                    // Drop matched assoc-consts (W18 path — VariantCountConst /
+                    // AllVariantsConst patterns where the derive emits a const
+                    // and the pre-derive code had the same const hand-written).
+                    // Routed through the Detector registry so adding new
+                    // assoc-const detectors is automatic.
+                    ImplItem::Const(c) => !crate::detector::detectors()
+                        .iter()
+                        .any(|d| d.pattern() == cand.pattern && d.matches_assoc_const(c)),
                     _ => true,
                 });
                 removed += before - imp.items.len();

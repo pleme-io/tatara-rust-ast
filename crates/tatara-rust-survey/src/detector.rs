@@ -40,6 +40,25 @@ pub trait Detector: Send + Sync {
     /// discover → transform → re-parse roundtrip exercised for
     /// free — no per-detector test authoring.
     fn canonical_example(&self) -> &'static str;
+    /// Does this associated constant match the canonical shape
+    /// this detector recognizes? Default `false` — only detectors
+    /// that target whole-impl assoc-const patterns (like
+    /// `VariantCount` emitting `pub const COUNT: usize = N`)
+    /// override. Opens the trait surface to non-fn impl items
+    /// without breaking the 10 existing per-fn detectors.
+    fn matches_assoc_const(&self, _c: &syn::ImplItemConst) -> bool {
+        false
+    }
+    /// Minimum count of impl items matching this detector's pattern
+    /// inside one impl block to surface a candidate. Default `2`:
+    /// per-field/per-variant patterns where one hand-written method
+    /// could be intentional but ≥2 indicates a derive earns its
+    /// keep. Whole-impl patterns (single assoc const per enum/struct)
+    /// override to `1` — they're one-off declarations where a
+    /// single match already justifies the derive.
+    fn min_count(&self) -> usize {
+        2
+    }
 }
 
 /// The canonical fleet detector registry. Order is meaningful only
@@ -58,6 +77,8 @@ pub fn detectors() -> &'static [&'static dyn Detector] {
         &TakeAllDetector,
         &ResetAllDetector,
         &SwapAllDetector,
+        &VariantCountConstDetector,
+        &AllVariantsConstDetector,
     ]
 }
 
@@ -712,6 +733,121 @@ fn is_swap_shape(f: &ImplItemFn, field: &str) -> bool {
     matches_field_access(&r.expr, field)
 }
 
+// ─────────────────────────────────────────────────────────────────────
+// VariantCountConst: `pub const COUNT: usize = N;` on an enum impl.
+// First whole-impl assoc-const detector — overrides matches_assoc_const
+// (instead of matches) and min_count = 1 (one const per enum is the
+// declaration). matches() returns false because there's no fn shape.
+// ─────────────────────────────────────────────────────────────────────
+
+pub struct VariantCountConstDetector;
+
+impl Detector for VariantCountConstDetector {
+    fn pattern(&self) -> MatchedPattern {
+        MatchedPattern::VariantCountConst
+    }
+    fn derive_crate(&self) -> &'static str {
+        "pleme-variantcount-derive"
+    }
+    fn derive_trait(&self) -> &'static str {
+        "VariantCount"
+    }
+    fn matches(&self, _f: &ImplItemFn) -> bool {
+        false
+    }
+    fn matches_assoc_const(&self, c: &syn::ImplItemConst) -> bool {
+        // `pub const COUNT: usize = <int-lit>`
+        if c.ident != "COUNT" {
+            return false;
+        }
+        let syn::Type::Path(tp) = &c.ty else {
+            return false;
+        };
+        if !tp.path.is_ident("usize") {
+            return false;
+        }
+        // Accept any int-literal expression as the value — operators
+        // either write the literal directly or via const fn arithmetic.
+        matches!(
+            &c.expr,
+            syn::Expr::Lit(syn::ExprLit {
+                lit: syn::Lit::Int(_),
+                ..
+            })
+        )
+    }
+    fn min_count(&self) -> usize {
+        1
+    }
+    fn canonical_example(&self) -> &'static str {
+        r#"
+pub enum Status { Active, Pending, Done }
+impl Status {
+    pub const COUNT: usize = 3;
+}
+"#
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// AllVariantsConst: `pub const ALL: &'static [Self] = &[Self::A, ...];`
+// on a unit-variant enum impl. Same trait shape as VariantCountConst
+// — overrides matches_assoc_const + min_count = 1.
+// ─────────────────────────────────────────────────────────────────────
+
+pub struct AllVariantsConstDetector;
+
+impl Detector for AllVariantsConstDetector {
+    fn pattern(&self) -> MatchedPattern {
+        MatchedPattern::AllVariantsConst
+    }
+    fn derive_crate(&self) -> &'static str {
+        "pleme-allvariants-derive"
+    }
+    fn derive_trait(&self) -> &'static str {
+        "AllVariants"
+    }
+    fn matches(&self, _f: &ImplItemFn) -> bool {
+        false
+    }
+    fn matches_assoc_const(&self, c: &syn::ImplItemConst) -> bool {
+        // `pub const ALL: &'static [Self] = &[Self::A, ...]`
+        if c.ident != "ALL" {
+            return false;
+        }
+        // Type: &'static [Self] OR &[Self] (some operators omit
+        // 'static when context-inferred — accept both).
+        let syn::Type::Reference(tr) = &c.ty else {
+            return false;
+        };
+        let syn::Type::Slice(ts) = tr.elem.as_ref() else {
+            return false;
+        };
+        let syn::Type::Path(elem_tp) = ts.elem.as_ref() else {
+            return false;
+        };
+        if !elem_tp.path.is_ident("Self") {
+            return false;
+        }
+        // Value: `&[...]` — reference-to-array-literal.
+        let syn::Expr::Reference(r) = &c.expr else {
+            return false;
+        };
+        matches!(r.expr.as_ref(), syn::Expr::Array(_))
+    }
+    fn min_count(&self) -> usize {
+        1
+    }
+    fn canonical_example(&self) -> &'static str {
+        r#"
+pub enum Status { Active, Pending, Done }
+impl Status {
+    pub const ALL: &'static [Self] = &[Self::Active, Self::Pending, Self::Done];
+}
+"#
+    }
+}
+
 /// Path tail-match helper. `std::mem::replace`, `core::mem::replace`,
 /// `::core::mem::replace`, and `mem::replace` all return true for
 /// `&["mem", "replace"]`. Lets the detectors accept the operator's
@@ -767,7 +903,7 @@ mod tests {
     #[test]
     fn registry_has_one_detector_per_pattern() {
         let dets = detectors();
-        assert_eq!(dets.len(), 10, "registry has the ten typed detectors");
+        assert_eq!(dets.len(), 12, "registry has the twelve typed detectors (10 inherent + 2 assoc-const)");
         // No two detectors claim the same pattern.
         let mut seen: Vec<MatchedPattern> = vec![];
         for d in dets {
@@ -786,7 +922,7 @@ mod tests {
         let mut crates: Vec<&str> = dets.iter().map(|d| d.derive_crate()).collect();
         crates.sort();
         crates.dedup();
-        assert_eq!(crates.len(), 10, "every detector points at a distinct derive crate");
+        assert_eq!(crates.len(), 12, "every detector points at a distinct derive crate");
     }
 
     #[test]

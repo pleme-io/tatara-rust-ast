@@ -102,6 +102,12 @@ pub enum MatchedPattern {
     /// `pub fn swap_<field>(&mut self, other: &mut Self) { std::mem::swap(...) }`.
     /// Adopt: `pleme-swap-derive` → `#[derive(SwapAll)]`.
     SwapAll,
+    /// `pub const COUNT: usize = N` on an enum impl block.
+    /// Adopt: `pleme-variantcount-derive` → `#[derive(VariantCount)]`.
+    VariantCountConst,
+    /// `pub const ALL: &'static [Self] = &[Self::A, Self::B, ...]` on a unit-variant enum.
+    /// Adopt: `pleme-allvariants-derive` → `#[derive(AllVariants)]`.
+    AllVariantsConst,
 }
 
 impl MatchedPattern {
@@ -228,23 +234,40 @@ impl<'ast> Visit<'ast> for SurveyVisitor {
         // report line 1. Operators get the file path either way.
         let line = 1;
 
-        // Walk the impl items and classify each `fn`. To get a
-        // **per-field** match (GetterAll vs SetterAll vs WithBuilder),
-        // we count how many fns in this impl match the pattern;
-        // require ≥2 to call it a "candidate worth reporting" — a
-        // single getter could be hand-rolled with reason.
+        // Walk the impl items and classify each one against every
+        // detector. ImplItem::Fn → matches/matches_assoc_const?
+        // ImplItem::Const → matches_assoc_const only. Each detector
+        // controls its own min_count (per-field/per-variant default
+        // to ≥2; whole-impl assoc-const patterns override to ≥1).
         let mut counts: std::collections::HashMap<MatchedPattern, usize> =
             std::collections::HashMap::new();
         for item in &i.items {
-            if let syn::ImplItem::Fn(f) = item {
-                if let Some(pat) = classify_fn(f) {
-                    *counts.entry(pat).or_default() += 1;
+            match item {
+                syn::ImplItem::Fn(f) => {
+                    if let Some(pat) = classify_fn(f) {
+                        *counts.entry(pat).or_default() += 1;
+                    }
                 }
+                syn::ImplItem::Const(c) => {
+                    for d in detector::detectors() {
+                        if d.matches_assoc_const(c) {
+                            *counts.entry(d.pattern()).or_default() += 1;
+                            break; // first-match-wins; assoc-const detectors are disjoint
+                        }
+                    }
+                }
+                _ => {}
             }
         }
 
+        // Per-detector min_count gates emission. Look up the detector
+        // by pattern to read its threshold.
+        let det_for = |p: MatchedPattern| -> Option<&'static dyn detector::Detector> {
+            detector::detectors().iter().find(|d| d.pattern() == p).copied()
+        };
         for (pat, count) in counts {
-            if count >= 2 {
+            let min = det_for(pat).map(|d| d.min_count()).unwrap_or(2);
+            if count >= min {
                 self.candidates.push(RefactorCandidate {
                     file: self.file.clone(),
                     line,
@@ -252,7 +275,7 @@ impl<'ast> Visit<'ast> for SurveyVisitor {
                     derive_trait: pat.derive_trait(),
                     pattern: pat,
                     target_type: target_type.clone(),
-                    // Rough estimate: 5 LOC per impl fn (open + body + close).
+                    // Rough estimate: 5 LOC per impl item (open + body + close).
                     estimated_loc_saved: count * 5,
                 });
             }
