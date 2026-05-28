@@ -30,9 +30,11 @@ use std::path::{Path, PathBuf};
 use syn::visit::Visit;
 
 pub mod apply;
+pub mod detector;
 pub mod fleet;
 pub mod pipeline;
 pub use apply::{apply_to_source, ApplyError};
+pub use detector::{detectors, Detector};
 pub use fleet::{survey_fleet, CrateSurveyEntry, FleetSurveyReport};
 pub use pipeline::{
     apply_all_to_source, survey_apply_validate, FileOutcome, PipelineError, PipelineOpts,
@@ -79,21 +81,26 @@ pub enum MatchedPattern {
 }
 
 impl MatchedPattern {
+    /// Derive crate name (kebab-case) for this pattern. Routed
+    /// through the [`detector`] registry so MatchedPattern stays a
+    /// pure identifier — the per-pattern data lives on the detector
+    /// that owns it. Panics if a pattern variant has no detector
+    /// (registry-invariant: every variant MUST have one).
     pub fn derive_crate(self) -> &'static str {
-        match self {
-            Self::GetterAll => "pleme-getter-derive",
-            Self::SetterAll => "pleme-setter-derive",
-            Self::WithBuilder => "pleme-builder-derive",
-            Self::IsVariant => "pleme-isvariant-derive",
-        }
+        detector::detectors()
+            .iter()
+            .find(|d| d.pattern() == self)
+            .map(|d| d.derive_crate())
+            .expect("every MatchedPattern variant has a Detector in the registry")
     }
+    /// Trait identifier (PascalCase) for this pattern. Same routing
+    /// as [`Self::derive_crate`].
     pub fn derive_trait(self) -> &'static str {
-        match self {
-            Self::GetterAll => "GetterAll",
-            Self::SetterAll => "SetterAll",
-            Self::WithBuilder => "WithBuilder",
-            Self::IsVariant => "IsVariant",
-        }
+        detector::detectors()
+            .iter()
+            .find(|d| d.pattern() == self)
+            .map(|d| d.derive_trait())
+            .expect("every MatchedPattern variant has a Detector in the registry")
     }
 }
 
@@ -227,185 +234,18 @@ impl<'ast> Visit<'ast> for SurveyVisitor {
 // ─────────────────────────────────────────────────────────────────────
 
 /// Classify a single `impl` method against the farm derive shapes.
-/// Returns `None` if the fn doesn't match any known canonical shape.
+/// Returns `None` if the fn doesn't match any [`Detector`] in the
+/// registry.
+///
+/// First-match-wins: the registry is ordered, but the canonical four
+/// detectors are disjoint by fn-name prefix + body shape, so order
+/// doesn't currently matter. Future detectors must preserve that
+/// invariant or land registry-order tests asserting precedence.
 pub(crate) fn classify_fn(f: &syn::ImplItemFn) -> Option<MatchedPattern> {
-    let name = f.sig.ident.to_string();
-    // GetterAll: `pub fn <field>(&self) -> &<T> { &self.<field> }`
-    if is_getter_shape(f, &name) {
-        return Some(MatchedPattern::GetterAll);
-    }
-    // SetterAll: `pub fn set_<field>(&mut self, v: <T>) { self.<field> = v; }`
-    if name.starts_with("set_") && is_setter_shape(f, name.strip_prefix("set_")?) {
-        return Some(MatchedPattern::SetterAll);
-    }
-    // WithBuilder: `pub fn with_<field>(mut self, v: <T>) -> Self { self.<field> = v; self }`
-    if name.starts_with("with_") && is_with_builder_shape(f, name.strip_prefix("with_")?) {
-        return Some(MatchedPattern::WithBuilder);
-    }
-    // IsVariant: `pub fn is_<variant>(&self) -> bool { matches!(self, Self::<variant>...) }`
-    if name.starts_with("is_") && is_isvariant_shape(f, name.strip_prefix("is_")?) {
-        return Some(MatchedPattern::IsVariant);
-    }
-    None
-}
-
-fn is_getter_shape(f: &syn::ImplItemFn, field: &str) -> bool {
-    // Receiver: `&self` (no `mut`).
-    if !matches!(
-        f.sig.inputs.first(),
-        Some(syn::FnArg::Receiver(r)) if r.reference.is_some() && r.mutability.is_none()
-    ) {
-        return false;
-    }
-    if f.sig.inputs.len() != 1 {
-        return false;
-    }
-    // Return: `&<T>`.
-    let syn::ReturnType::Type(_, ret) = &f.sig.output else {
-        return false;
-    };
-    if !matches!(ret.as_ref(), syn::Type::Reference(_)) {
-        return false;
-    }
-    // Body: single `&self.<field>` expression.
-    let stmts = &f.block.stmts;
-    if stmts.len() != 1 {
-        return false;
-    }
-    let syn::Stmt::Expr(expr, None) = &stmts[0] else {
-        return false;
-    };
-    let syn::Expr::Reference(r) = expr else {
-        return false;
-    };
-    matches_field_access(&r.expr, field)
-}
-
-fn is_setter_shape(f: &syn::ImplItemFn, field: &str) -> bool {
-    // Receiver: `&mut self`.
-    if !matches!(
-        f.sig.inputs.first(),
-        Some(syn::FnArg::Receiver(r)) if r.reference.is_some() && r.mutability.is_some()
-    ) {
-        return false;
-    }
-    if f.sig.inputs.len() != 2 {
-        return false;
-    }
-    // Return: `()`.
-    if !matches!(f.sig.output, syn::ReturnType::Default) {
-        return false;
-    }
-    // Body: single `self.<field> = v;` statement, no extras.
-    let stmts = &f.block.stmts;
-    if stmts.len() != 1 {
-        return false;
-    }
-    // Could be Stmt::Expr (with optional semicolon) or Stmt::Semi.
-    matches_setter_assign(&stmts[0], field)
-}
-
-fn is_with_builder_shape(f: &syn::ImplItemFn, field: &str) -> bool {
-    // Receiver: `mut self`.
-    if !matches!(
-        f.sig.inputs.first(),
-        Some(syn::FnArg::Receiver(r)) if r.reference.is_none() && r.mutability.is_some()
-    ) {
-        return false;
-    }
-    if f.sig.inputs.len() != 2 {
-        return false;
-    }
-    // Return: `Self`.
-    let syn::ReturnType::Type(_, ret) = &f.sig.output else {
-        return false;
-    };
-    let syn::Type::Path(tp) = ret.as_ref() else {
-        return false;
-    };
-    if !tp.path.is_ident("Self") {
-        return false;
-    }
-    // Body: `self.<field> = v; self` — two stmts.
-    let stmts = &f.block.stmts;
-    if stmts.len() != 2 {
-        return false;
-    }
-    if !matches_setter_assign(&stmts[0], field) {
-        return false;
-    }
-    // Second stmt: `self` tail expression.
-    matches!(
-        &stmts[1],
-        syn::Stmt::Expr(syn::Expr::Path(p), _)
-            if p.path.is_ident("self")
-    )
-}
-
-fn is_isvariant_shape(f: &syn::ImplItemFn, _variant: &str) -> bool {
-    // Receiver: `&self`.
-    if !matches!(
-        f.sig.inputs.first(),
-        Some(syn::FnArg::Receiver(r)) if r.reference.is_some() && r.mutability.is_none()
-    ) {
-        return false;
-    }
-    if f.sig.inputs.len() != 1 {
-        return false;
-    }
-    // Return: `bool`.
-    let syn::ReturnType::Type(_, ret) = &f.sig.output else {
-        return false;
-    };
-    let syn::Type::Path(tp) = ret.as_ref() else {
-        return false;
-    };
-    if !tp.path.is_ident("bool") {
-        return false;
-    }
-    // Body: `matches!(self, …)` — single macro call.
-    let stmts = &f.block.stmts;
-    if stmts.len() != 1 {
-        return false;
-    }
-    let syn::Stmt::Expr(expr, _) = &stmts[0] else {
-        return false;
-    };
-    let syn::Expr::Macro(m) = expr else {
-        return false;
-    };
-    m.mac.path.is_ident("matches")
-}
-
-// ─────────────────────────────────────────────────────────────────────
-// Helpers
-// ─────────────────────────────────────────────────────────────────────
-
-fn matches_field_access(expr: &syn::Expr, field: &str) -> bool {
-    let syn::Expr::Field(fe) = expr else {
-        return false;
-    };
-    let syn::Expr::Path(p) = fe.base.as_ref() else {
-        return false;
-    };
-    if !p.path.is_ident("self") {
-        return false;
-    }
-    match &fe.member {
-        syn::Member::Named(id) => id == field,
-        syn::Member::Unnamed(_) => false,
-    }
-}
-
-fn matches_setter_assign(stmt: &syn::Stmt, field: &str) -> bool {
-    let expr = match stmt {
-        syn::Stmt::Expr(e, _) => e,
-        _ => return false,
-    };
-    let syn::Expr::Assign(a) = expr else {
-        return false;
-    };
-    matches_field_access(&a.left, field)
+    detector::detectors()
+        .iter()
+        .find(|d| d.matches(f))
+        .map(|d| d.pattern())
 }
 
 pub(crate) fn type_to_string(t: &syn::Type) -> String {
