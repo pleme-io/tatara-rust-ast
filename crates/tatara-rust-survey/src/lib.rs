@@ -30,7 +30,12 @@ use std::path::{Path, PathBuf};
 use syn::visit::Visit;
 
 pub mod apply;
+pub mod pipeline;
 pub use apply::{apply_to_source, ApplyError};
+pub use pipeline::{
+    apply_all_to_source, survey_apply_validate, FileOutcome, PipelineError, PipelineOpts,
+    PipelineOutcome,
+};
 
 /// One opportunity to replace a hand-written impl with a farm derive.
 /// The `current_impl` and `loc_saved` fields let `apply` produce a

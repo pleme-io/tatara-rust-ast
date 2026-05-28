@@ -694,6 +694,7 @@ dependencies = [
  "quote",
  "serde",
  "syn",
+ "tatara-rust-gate",
  "thiserror",
 ]
 

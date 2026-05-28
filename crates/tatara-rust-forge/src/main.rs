@@ -40,7 +40,9 @@ use tatara_rust_publish::{
     PublishConfig, PublishOutcome, RepoPublishSpec, RepoVisibility, publish_all,
 };
 use tatara_rust_tlisp::{parse_macrocatalog, render_macrocatalog};
-use tatara_rust_survey::{apply_to_source, survey_file, survey_tree};
+use tatara_rust_survey::{
+    apply_to_source, survey_apply_validate, survey_file, survey_tree, PipelineOpts,
+};
 
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
@@ -81,7 +83,8 @@ fn usage() -> ExitCode {
         tatara-rust-forge catalog-from-lisp <catalog.lisp> <out.json>   (parse defmacrocatalog → JSON)\n  \
         tatara-rust-forge catalog-to-lisp <catalog.json> <out.lisp>     (render JSON → defmacrocatalog)\n  \
         tatara-rust-forge survey <crate-src-path> [--json]              (scan a Rust crate for derive-adoption candidates)\n  \
-        tatara-rust-forge survey-apply <file.rs> [--write]              (apply the first candidate to a file; --write commits to disk)"
+        tatara-rust-forge survey-apply <file.rs> [--write]              (apply the first candidate to a file; --write commits to disk)\n  \
+        tatara-rust-forge survey-apply-all <crate-root> [--write] [--no-validate] [--skip-clippy] (whole-crate survey → apply → validate, rolls back on red gate)"
     );
     ExitCode::from(2)
 }
@@ -105,6 +108,7 @@ fn main() -> ExitCode {
         "catalog-to-lisp" => cmd_catalog_to_lisp(rest),
         "survey" => cmd_survey(rest),
         "survey-apply" => cmd_survey_apply(rest),
+        "survey-apply-all" => cmd_survey_apply_all(rest),
         "--help" | "-h" => {
             usage();
             return ExitCode::SUCCESS;
@@ -809,6 +813,93 @@ fn cmd_survey_apply(args: &[String]) -> Result<String, String> {
         Ok(format!(
             "preview ready ({} bytes); re-run with --write to land",
             modified.len()
+        ))
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// survey-apply-all — whole-crate adoption with rollback on red gate
+// ─────────────────────────────────────────────────────────────────────
+
+fn cmd_survey_apply_all(args: &[String]) -> Result<String, String> {
+    if args.is_empty() {
+        return Err(
+            "survey-apply-all: needs <crate-root> [--write] [--no-validate] [--skip-clippy]".into(),
+        );
+    }
+    let crate_root = PathBuf::from(&args[0]);
+    let write = args.iter().any(|a| a == "--write");
+    let no_validate = args.iter().any(|a| a == "--no-validate");
+    let skip_clippy = args.iter().any(|a| a == "--skip-clippy");
+
+    let mut gate_cfg = GateConfig::default();
+    if skip_clippy {
+        gate_cfg.gates.retain(|g| !matches!(g, Gate::Clippy));
+    }
+
+    let opts = PipelineOpts {
+        write,
+        validate: !no_validate,
+        gate_cfg,
+    };
+
+    let out = survey_apply_validate(&crate_root, &opts)
+        .map_err(|e| format!("pipeline: {e}"))?;
+
+    let mode_label = match (write, no_validate) {
+        (false, _) => "DRY-RUN",
+        (true, true) => "WRITE (no-validate)",
+        (true, false) => "WRITE + VALIDATE",
+    };
+    println!("=== tatara-rust-forge survey-apply-all ===");
+    println!("Crate:  {}", out.crate_root.display());
+    println!("Mode:   {mode_label}");
+    println!(
+        "Files:  {} touched, {} written",
+        out.files.len(),
+        out.files.iter().filter(|f| f.written).count(),
+    );
+    println!(
+        "Candidates: {} attempted, {} applied",
+        out.total_candidates, out.total_applied,
+    );
+    if let Some(gate) = &out.gate {
+        match gate {
+            GateOutcome::Passed => println!("Gate:   ✓ passed (build + test{})", if skip_clippy { "" } else { " + clippy" }),
+            GateOutcome::SkippedNoCargo => println!("Gate:   skipped (no Cargo.toml at root)"),
+            GateOutcome::Failed { gate: g, exit, stderr, .. } => {
+                println!("Gate:   ✗ FAILED at `{}` (exit {:?})", g.label(), exit);
+                println!("──── stderr (tail) ────");
+                for line in stderr.lines().rev().take(20).collect::<Vec<_>>().iter().rev() {
+                    println!("{line}");
+                }
+            }
+        }
+    } else if write {
+        println!("Gate:   skipped (--no-validate)");
+    } else {
+        println!("Gate:   skipped (dry run)");
+    }
+    if out.rolled_back {
+        println!("Rolled back: every written file restored to its pre-pipeline contents.");
+    }
+
+    if out.rolled_back {
+        Err(format!(
+            "rolled back ({} applied across {} files; gate went red — working tree restored)",
+            out.total_applied,
+            out.files.iter().filter(|f| f.candidates_applied > 0).count(),
+        ))
+    } else {
+        Ok(format!(
+            "{} candidates applied across {} files; {}",
+            out.total_applied,
+            out.files.iter().filter(|f| f.candidates_applied > 0).count(),
+            match (write, no_validate) {
+                (false, _) => "dry run — re-run with --write to land",
+                (true, true) => "written to disk (no validation requested)",
+                (true, false) => "validated green — changes live",
+            },
         ))
     }
 }
