@@ -28,6 +28,18 @@ pub trait Detector: Send + Sync {
     /// Does this function body match the canonical shape this
     /// detector recognizes?
     fn matches(&self, f: &ImplItemFn) -> bool;
+    /// Self-contained Rust source that exercises this detector's
+    /// shape end-to-end. MUST: (1) parse as a `syn::File`; (2)
+    /// surface ≥1 candidate matching `self.pattern()` when run
+    /// through `survey_file`; (3) apply cleanly via
+    /// `apply_to_source` into well-formed Rust that re-parses.
+    ///
+    /// This is the contract every detector pays in exchange for
+    /// the universal roundtrip integration test. Adding a new
+    /// detector that implements this method gets the full
+    /// discover → transform → re-parse roundtrip exercised for
+    /// free — no per-detector test authoring.
+    fn canonical_example(&self) -> &'static str;
 }
 
 /// The canonical fleet detector registry. Order is meaningful only
@@ -68,6 +80,15 @@ impl Detector for GetterAllDetector {
     fn matches(&self, f: &ImplItemFn) -> bool {
         let name = f.sig.ident.to_string();
         is_getter_shape(f, &name)
+    }
+    fn canonical_example(&self) -> &'static str {
+        r#"
+pub struct G { pub a: i32, pub b: String }
+impl G {
+    pub fn a(&self) -> &i32 { &self.a }
+    pub fn b(&self) -> &String { &self.b }
+}
+"#
     }
 }
 
@@ -123,6 +144,15 @@ impl Detector for SetterAllDetector {
         };
         is_setter_shape(f, field)
     }
+    fn canonical_example(&self) -> &'static str {
+        r#"
+pub struct S { pub a: i32, pub b: String }
+impl S {
+    pub fn set_a(&mut self, v: i32) { self.a = v; }
+    pub fn set_b(&mut self, v: String) { self.b = v; }
+}
+"#
+    }
 }
 
 fn is_setter_shape(f: &ImplItemFn, field: &str) -> bool {
@@ -167,6 +197,15 @@ impl Detector for WithBuilderDetector {
             return false;
         };
         is_with_builder_shape(f, field)
+    }
+    fn canonical_example(&self) -> &'static str {
+        r#"
+pub struct W { pub a: i32, pub b: String }
+impl W {
+    pub fn with_a(mut self, v: i32) -> Self { self.a = v; self }
+    pub fn with_b(mut self, v: String) -> Self { self.b = v; self }
+}
+"#
     }
 }
 
@@ -226,6 +265,16 @@ impl Detector for IsVariantDetector {
         }
         is_isvariant_shape(f)
     }
+    fn canonical_example(&self) -> &'static str {
+        r#"
+pub enum V { A, B(i32), C { x: u8 } }
+impl V {
+    pub fn is_a(&self) -> bool { matches!(self, Self::A) }
+    pub fn is_b(&self) -> bool { matches!(self, Self::B(_)) }
+    pub fn is_c(&self) -> bool { matches!(self, Self::C { .. }) }
+}
+"#
+    }
 }
 
 fn is_isvariant_shape(f: &ImplItemFn) -> bool {
@@ -276,6 +325,15 @@ impl Detector for AsMutAllDetector {
             return false;
         };
         is_asmut_shape(f, field)
+    }
+    fn canonical_example(&self) -> &'static str {
+        r#"
+pub struct M { pub a: i32, pub b: String }
+impl M {
+    pub fn a_mut(&mut self) -> &mut i32 { &mut self.a }
+    pub fn b_mut(&mut self) -> &mut String { &mut self.b }
+}
+"#
     }
 }
 
@@ -334,6 +392,15 @@ impl Detector for OwnedAllDetector {
         };
         is_owned_shape(f, field)
     }
+    fn canonical_example(&self) -> &'static str {
+        r#"
+pub struct O { pub a: i32, pub b: String }
+impl O {
+    pub fn into_a(self) -> i32 { self.a }
+    pub fn into_b(self) -> String { self.b }
+}
+"#
+    }
 }
 
 fn is_owned_shape(f: &ImplItemFn, field: &str) -> bool {
@@ -383,6 +450,15 @@ impl Detector for ReplaceAllDetector {
             return false;
         };
         is_replace_shape(f, field)
+    }
+    fn canonical_example(&self) -> &'static str {
+        r#"
+pub struct R { pub a: i32, pub b: String }
+impl R {
+    pub fn replace_a(&mut self, v: i32) -> i32 { std::mem::replace(&mut self.a, v) }
+    pub fn replace_b(&mut self, v: String) -> String { std::mem::replace(&mut self.b, v) }
+}
+"#
     }
 }
 
@@ -442,6 +518,15 @@ impl Detector for TakeAllDetector {
         };
         is_take_shape(f, field)
     }
+    fn canonical_example(&self) -> &'static str {
+        r#"
+pub struct T { pub a: i32, pub b: String }
+impl T {
+    pub fn take_a(&mut self) -> i32 { std::mem::take(&mut self.a) }
+    pub fn take_b(&mut self) -> String { std::mem::take(&mut self.b) }
+}
+"#
+    }
 }
 
 fn is_take_shape(f: &ImplItemFn, field: &str) -> bool {
@@ -497,6 +582,15 @@ impl Detector for ResetAllDetector {
             return false;
         };
         is_reset_shape(f, field)
+    }
+    fn canonical_example(&self) -> &'static str {
+        r#"
+pub struct Rs { pub a: i32, pub b: String }
+impl Rs {
+    pub fn reset_a(&mut self) { self.a = <i32 as ::std::default::Default>::default(); }
+    pub fn reset_b(&mut self) { self.b = <String as ::std::default::Default>::default(); }
+}
+"#
     }
 }
 
@@ -564,6 +658,15 @@ impl Detector for SwapAllDetector {
             return false;
         };
         is_swap_shape(f, field)
+    }
+    fn canonical_example(&self) -> &'static str {
+        r#"
+pub struct Sw { pub a: i32, pub b: String }
+impl Sw {
+    pub fn swap_a(&mut self, other: &mut Self) { ::std::mem::swap(&mut self.a, &mut other.a); }
+    pub fn swap_b(&mut self, other: &mut Self) { ::std::mem::swap(&mut self.b, &mut other.b); }
+}
+"#
     }
 }
 
@@ -765,6 +868,81 @@ mod tests {
             pub fn reset_host(&mut self) { self.host = "".to_string(); }
         };
         assert!(!ResetAllDetector.matches(&bad), "string literal RHS → reject");
+    }
+
+    /// THE compounding test: every Detector in the registry gets
+    /// its full discover → transform → re-parse roundtrip exercised
+    /// here, in ONE block, via the trait-level
+    /// [`Detector::canonical_example`] contract.
+    ///
+    /// Adding a new detector adds ONE more iteration to this test
+    /// AUTOMATICALLY — no per-detector test authoring. Adding a
+    /// detector whose canonical_example doesn't survey to a
+    /// matching candidate, or whose applied output doesn't re-parse,
+    /// fails THIS test rather than letting bugs leak past the
+    /// trait boundary into operator land.
+    ///
+    /// The test asserts the full contract:
+    ///   1. canonical_example produces source that PARSES.
+    ///   2. survey_file finds ≥1 candidate matching the detector's
+    ///      pattern.
+    ///   3. apply_to_source on that candidate produces output that
+    ///      RE-PARSES as a valid syn::File.
+    ///   4. The output contains the expected `#[derive(<Trait>)]`
+    ///      attribute.
+    ///   5. The output contains the expected
+    ///      `use <crate_module>::<Trait>;` import.
+    #[test]
+    fn every_detector_roundtrips_its_canonical_example() {
+        use crate::{apply_to_source, survey_file};
+
+        let pid = std::process::id();
+        for d in detectors() {
+            let src = d.canonical_example();
+            let pattern = d.pattern();
+            let trait_name = d.derive_trait();
+            let crate_module = d.derive_crate().replace('-', "_");
+
+            // Step 1: source parses.
+            syn::parse_file(src).unwrap_or_else(|e| {
+                panic!("canonical_example for {pattern:?} doesn't parse: {e}\nsrc:\n{src}")
+            });
+
+            // Step 2: survey produces ≥1 candidate matching this pattern.
+            let tmp = std::env::temp_dir().join(format!("ce-{trait_name}-{pid}"));
+            std::fs::create_dir_all(&tmp).unwrap();
+            let path = tmp.join("lib.rs");
+            std::fs::write(&path, src).unwrap();
+            let cands = survey_file(&path).unwrap();
+            let cand = cands.iter().find(|c| c.pattern == pattern).unwrap_or_else(|| {
+                panic!(
+                    "canonical_example for {pattern:?} surveyed to no matching candidate; got {cands:?}"
+                )
+            });
+
+            // Step 3: apply produces re-parseable output.
+            let out = apply_to_source(src, cand).unwrap_or_else(|e| {
+                panic!("apply failed for {pattern:?}: {e}\nsrc:\n{src}")
+            });
+            syn::parse_file(&out).unwrap_or_else(|e| {
+                panic!(
+                    "applied output for {pattern:?} doesn't re-parse: {e}\noutput:\n{out}"
+                )
+            });
+
+            // Step 4: #[derive(<Trait>)] is on the target.
+            assert!(
+                out.contains(&format!("#[derive({trait_name})]")),
+                "{pattern:?}: output missing #[derive({trait_name})]:\n{out}"
+            );
+
+            // Step 5: import is at the top.
+            let want_use = format!("use {crate_module}::{trait_name}");
+            assert!(
+                out.contains(&want_use),
+                "{pattern:?}: output missing import `{want_use}`:\n{out}"
+            );
+        }
     }
 
     #[test]
