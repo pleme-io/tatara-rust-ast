@@ -40,7 +40,7 @@ use tatara_rust_publish::{
     PublishConfig, PublishOutcome, RepoPublishSpec, RepoVisibility, publish_all,
 };
 use tatara_rust_tlisp::{parse_macrocatalog, render_macrocatalog};
-use tatara_rust_survey::survey_tree;
+use tatara_rust_survey::{apply_to_source, survey_file, survey_tree};
 
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
@@ -80,7 +80,8 @@ fn usage() -> ExitCode {
         tatara-rust-forge catalog-instantiate <catalog.json> --out <dir> [--repo-url-prefix <url>] [--skip-clippy] [--no-gate] [--publish --org <org>]\n  \
         tatara-rust-forge catalog-from-lisp <catalog.lisp> <out.json>   (parse defmacrocatalog → JSON)\n  \
         tatara-rust-forge catalog-to-lisp <catalog.json> <out.lisp>     (render JSON → defmacrocatalog)\n  \
-        tatara-rust-forge survey <crate-src-path> [--json]              (scan a Rust crate for derive-adoption candidates)"
+        tatara-rust-forge survey <crate-src-path> [--json]              (scan a Rust crate for derive-adoption candidates)\n  \
+        tatara-rust-forge survey-apply <file.rs> [--write]              (apply the first candidate to a file; --write commits to disk)"
     );
     ExitCode::from(2)
 }
@@ -103,6 +104,7 @@ fn main() -> ExitCode {
         "catalog-from-lisp" => cmd_catalog_from_lisp(rest),
         "catalog-to-lisp" => cmd_catalog_to_lisp(rest),
         "survey" => cmd_survey(rest),
+        "survey-apply" => cmd_survey_apply(rest),
         "--help" | "-h" => {
             usage();
             return ExitCode::SUCCESS;
@@ -755,4 +757,58 @@ fn cmd_survey(args: &[String]) -> Result<String, String> {
             .collect::<std::collections::BTreeSet<_>>()
             .len(),
     ))
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// survey-apply — land the refactor in source via syn::visit_mut
+// ─────────────────────────────────────────────────────────────────────
+
+fn cmd_survey_apply(args: &[String]) -> Result<String, String> {
+    if args.is_empty() {
+        return Err("survey-apply: needs <file.rs> [--write]".into());
+    }
+    let file_path = PathBuf::from(&args[0]);
+    let write = args.iter().any(|a| a == "--write");
+
+    let cands = survey_file(&file_path)
+        .map_err(|e| format!("survey {}: {e}", file_path.display()))?;
+    let Some(cand) = cands.into_iter().next() else {
+        return Ok(format!(
+            "no candidates in {} — nothing to apply",
+            file_path.display()
+        ));
+    };
+
+    let src = std::fs::read_to_string(&file_path)
+        .map_err(|e| format!("read {}: {e}", file_path.display()))?;
+    let modified = apply_to_source(&src, &cand)
+        .map_err(|e| format!("apply: {e}"))?;
+
+    if write {
+        std::fs::write(&file_path, &modified)
+            .map_err(|e| format!("write {}: {e}", file_path.display()))?;
+        Ok(format!(
+            "applied {:?} to {} → impl {} now derives {}; wrote to disk. \
+             Don't forget to add `{}` to Cargo.toml as a git dep.",
+            cand.pattern,
+            file_path.display(),
+            cand.target_type,
+            cand.derive_trait,
+            cand.derive_crate,
+        ))
+    } else {
+        println!("=== DRY-RUN: tatara-rust-forge survey-apply ===");
+        println!("File:        {}", file_path.display());
+        println!("Target type: {}", cand.target_type);
+        println!("Pattern:     {:?}", cand.pattern);
+        println!("Derive:      #[derive({})]", cand.derive_trait);
+        println!("Cargo dep:   {}", cand.derive_crate);
+        println!("─────── modified source ───────");
+        println!("{modified}");
+        println!("─────── (re-run with --write to apply to disk) ───────");
+        Ok(format!(
+            "preview ready ({} bytes); re-run with --write to land",
+            modified.len()
+        ))
+    }
 }

@@ -689,6 +689,7 @@ dependencies = [
 name = "tatara-rust-survey"
 version = "0.1.0"
 dependencies = [
+ "prettyplease",
  "proc-macro2",
  "quote",
  "serde",

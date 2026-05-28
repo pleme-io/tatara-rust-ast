@@ -29,6 +29,9 @@ use serde::Serialize;
 use std::path::{Path, PathBuf};
 use syn::visit::Visit;
 
+pub mod apply;
+pub use apply::{apply_to_source, ApplyError};
+
 /// One opportunity to replace a hand-written impl with a farm derive.
 /// The `current_impl` and `loc_saved` fields let `apply` produce a
 /// precise diff; the `derive_crate` field tells the operator which
@@ -218,7 +221,7 @@ impl<'ast> Visit<'ast> for SurveyVisitor {
 
 /// Classify a single `impl` method against the farm derive shapes.
 /// Returns `None` if the fn doesn't match any known canonical shape.
-fn classify_fn(f: &syn::ImplItemFn) -> Option<MatchedPattern> {
+pub(crate) fn classify_fn(f: &syn::ImplItemFn) -> Option<MatchedPattern> {
     let name = f.sig.ident.to_string();
     // GetterAll: `pub fn <field>(&self) -> &<T> { &self.<field> }`
     if is_getter_shape(f, &name) {
@@ -398,7 +401,7 @@ fn matches_setter_assign(stmt: &syn::Stmt, field: &str) -> bool {
     matches_field_access(&a.left, field)
 }
 
-fn type_to_string(t: &syn::Type) -> String {
+pub(crate) fn type_to_string(t: &syn::Type) -> String {
     use quote::ToTokens;
     let _ = Span::call_site();
     let mut buf = proc_macro2::TokenStream::new();
