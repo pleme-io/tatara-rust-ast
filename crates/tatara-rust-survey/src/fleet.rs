@@ -302,6 +302,160 @@ pub fn survey_fleet_apply(
     })
 }
 
+// ─────────────────────────────────────────────────────────────────────
+// Fleet-wide validate — substrate QAs itself against real fleet code
+// ─────────────────────────────────────────────────────────────────────
+
+use crate::{apply_to_source, ApplyError};
+
+/// One candidate's validation outcome — typed at the failure
+/// boundary so the operator gets actionable lookups by class.
+#[derive(Debug, Serialize)]
+pub enum ValidateOutcome {
+    /// Apply produced re-parseable Rust. Substrate is sound for
+    /// this candidate.
+    Ok,
+    /// `apply_to_source` returned a typed `ApplyError`. The
+    /// candidate's surveyor produced something the transformer
+    /// can't land — a substrate bug (mismatched survey/apply
+    /// contracts), not user code.
+    ApplyFailed(String),
+    /// Apply succeeded but the output failed to re-parse as
+    /// `syn::File`. The substrate emitted invalid Rust — the worst
+    /// class. Likely a `syn::visit_mut` corner case (generics,
+    /// lifetimes, raw identifiers, etc.).
+    OutputUnparseable(String),
+}
+
+impl ValidateOutcome {
+    pub fn is_ok(&self) -> bool {
+        matches!(self, Self::Ok)
+    }
+    /// Short, sortable category label for histogram aggregation.
+    pub fn class_label(&self) -> &'static str {
+        match self {
+            Self::Ok => "ok",
+            Self::ApplyFailed(_) => "apply-failed",
+            Self::OutputUnparseable(_) => "output-unparseable",
+        }
+    }
+}
+
+/// Per-candidate validation record — what was checked and what
+/// happened.
+#[derive(Debug, Serialize)]
+pub struct CandidateValidation {
+    pub crate_path: PathBuf,
+    pub file: PathBuf,
+    pub pattern: String,
+    pub target_type: String,
+    pub outcome: ValidateOutcome,
+}
+
+/// Aggregate result of the substrate's self-QA against the fleet.
+#[derive(Debug, Serialize)]
+pub struct FleetValidateReport {
+    pub root: PathBuf,
+    pub total_candidates: usize,
+    pub ok: usize,
+    /// Only failed candidates carried — successful ones are
+    /// implicit in `ok` count and not aggregated to keep the
+    /// report tractable at scale.
+    pub failed: Vec<CandidateValidation>,
+    /// Failure class → count. Operators read this first to focus
+    /// on the most common drift class.
+    pub by_error_class: BTreeMap<String, usize>,
+}
+
+impl FleetValidateReport {
+    pub fn is_clean(&self) -> bool {
+        self.failed.is_empty()
+    }
+    pub fn failure_rate(&self) -> f64 {
+        if self.total_candidates == 0 {
+            return 0.0;
+        }
+        (self.failed.len() as f64) / (self.total_candidates as f64)
+    }
+}
+
+/// For every `RefactorCandidate` in `survey_fleet(root)`, exercise
+/// `apply_to_source` in-memory + verify the output re-parses. No
+/// disk writes, no cargo gates, no rollback machinery — pure read
+/// + transform + reparse, at fleet scale.
+///
+/// **The substrate's self-QA loop**: the fleet IS the test corpus.
+/// Adding a new detector means the next `survey_fleet_validate`
+/// run exercises its discover→apply roundtrip on every real-world
+/// site, surfacing edge cases (generics, lifetimes, attrs,
+/// visibility quirks) that synthetic tests would miss.
+pub fn survey_fleet_validate(root: &Path) -> Result<FleetValidateReport, SurveyError> {
+    let report = survey_fleet(root)?;
+    let mut out_failed: Vec<CandidateValidation> = vec![];
+    let mut ok_count = 0usize;
+    let mut by_class: BTreeMap<String, usize> = BTreeMap::new();
+    let mut total = 0usize;
+
+    for entry in &report.entries {
+        // Load the file once per candidate's file to keep IO bounded.
+        // Multiple candidates from the same file will re-read it;
+        // acceptable cost for ~250 candidates fleet-wide.
+        for cand in &entry.candidates {
+            total += 1;
+            let src = match std::fs::read_to_string(&cand.file) {
+                Ok(s) => s,
+                Err(e) => {
+                    let outcome = ValidateOutcome::ApplyFailed(format!("io: {e}"));
+                    *by_class.entry(outcome.class_label().to_string()).or_default() += 1;
+                    out_failed.push(CandidateValidation {
+                        crate_path: entry.crate_path.clone(),
+                        file: cand.file.clone(),
+                        pattern: format!("{:?}", cand.pattern),
+                        target_type: cand.target_type.clone(),
+                        outcome,
+                    });
+                    continue;
+                }
+            };
+            let outcome = match apply_to_source(&src, cand) {
+                Ok(applied) => match syn::parse_file(&applied) {
+                    Ok(_) => ValidateOutcome::Ok,
+                    Err(e) => ValidateOutcome::OutputUnparseable(e.to_string()),
+                },
+                Err(ApplyError::Parse(e)) => ValidateOutcome::ApplyFailed(format!("parse: {e}")),
+                Err(ApplyError::TargetNotFound(t)) => {
+                    ValidateOutcome::ApplyFailed(format!("target-not-found: {t}"))
+                }
+                Err(ApplyError::NoMethodsRemoved { pattern, target }) => {
+                    ValidateOutcome::ApplyFailed(format!(
+                        "no-methods-removed: pattern={pattern:?} target={target}"
+                    ))
+                }
+            };
+            if outcome.is_ok() {
+                ok_count += 1;
+            } else {
+                *by_class.entry(outcome.class_label().to_string()).or_default() += 1;
+                out_failed.push(CandidateValidation {
+                    crate_path: entry.crate_path.clone(),
+                    file: cand.file.clone(),
+                    pattern: format!("{:?}", cand.pattern),
+                    target_type: cand.target_type.clone(),
+                    outcome,
+                });
+            }
+        }
+    }
+
+    Ok(FleetValidateReport {
+        root: root.to_path_buf(),
+        total_candidates: total,
+        ok: ok_count,
+        failed: out_failed,
+        by_error_class: by_class,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -500,5 +654,40 @@ path = "src/lib.rs"
         };
         assert_eq!(report.green().len(), 0);
         assert_eq!(report.red().len(), 0);
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    // fleet-validate tests
+    // ─────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn fleet_validate_clean_org_reports_zero_failures() {
+        let root = tmp_org(
+            "validate-clean",
+            &[("alpha", GETTER_BODY), ("beta", ISVARIANT_BODY)],
+        );
+        let report = survey_fleet_validate(&root).unwrap();
+        assert!(
+            report.is_clean(),
+            "all canonical-shape candidates should validate; got {} failures: {:?}",
+            report.failed.len(),
+            report.failed
+        );
+        assert_eq!(report.ok, report.total_candidates);
+        assert_eq!(report.failure_rate(), 0.0);
+    }
+
+    #[test]
+    fn fleet_validate_aggregates_failures_by_class() {
+        // Empty report: degenerate but should be clean + zero rate.
+        let report = FleetValidateReport {
+            root: PathBuf::from("/tmp"),
+            total_candidates: 0,
+            ok: 0,
+            failed: vec![],
+            by_error_class: BTreeMap::new(),
+        };
+        assert!(report.is_clean());
+        assert_eq!(report.failure_rate(), 0.0);
     }
 }

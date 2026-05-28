@@ -42,7 +42,7 @@ use tatara_rust_publish::{
 use tatara_rust_tlisp::{parse_macrocatalog, render_macrocatalog};
 use tatara_rust_survey::{
     apply_to_source, survey_apply_validate, survey_file, survey_fleet, survey_fleet_apply,
-    survey_tree, FleetApplyOpts, PipelineOpts,
+    survey_fleet_validate, survey_tree, FleetApplyOpts, PipelineOpts,
 };
 
 #[derive(Serialize, Deserialize)]
@@ -87,7 +87,8 @@ fn usage() -> ExitCode {
         tatara-rust-forge survey-apply <file.rs> [--write]              (apply the first candidate to a file; --write commits to disk)\n  \
         tatara-rust-forge survey-apply-all <crate-root> [--write] [--no-validate] [--skip-clippy] [--no-inject-deps] (whole-crate survey → apply → inject Cargo.toml deps → validate; rolls back on red gate)\n  \
         tatara-rust-forge survey-fleet <org-root> [--threshold N] [--json] (aggregate every crate under org-root; leaderboard sorted by candidate count)\n  \
-        tatara-rust-forge survey-fleet-apply <org-root> [--threshold N] [--write] [--no-validate] [--skip-clippy] [--no-inject-deps] [--no-stop-on-rollback] (bulk fleet adoption; per-crate atomic apply+gate+rollback)"
+        tatara-rust-forge survey-fleet-apply <org-root> [--threshold N] [--write] [--no-validate] [--skip-clippy] [--no-inject-deps] [--no-stop-on-rollback] (bulk fleet adoption; per-crate atomic apply+gate+rollback)\n  \
+        tatara-rust-forge survey-fleet-validate <org-root> [--json]    (substrate self-QA: apply every fleet candidate in-memory + verify re-parse; aggregate failures by class)"
     );
     ExitCode::from(2)
 }
@@ -114,6 +115,7 @@ fn main() -> ExitCode {
         "survey-apply-all" => cmd_survey_apply_all(rest),
         "survey-fleet" => cmd_survey_fleet(rest),
         "survey-fleet-apply" => cmd_survey_fleet_apply(rest),
+        "survey-fleet-validate" => cmd_survey_fleet_validate(rest),
         "--help" | "-h" => {
             usage();
             return ExitCode::SUCCESS;
@@ -1123,6 +1125,78 @@ fn cmd_survey_fleet_apply(args: &[String]) -> Result<String, String> {
         report.crates_attempted,
         report.total_candidates_applied,
         if reds > 0 { format!(" ({reds} rolled back)") } else { String::new() },
+    ))
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// survey-fleet-validate — substrate QAs itself against the real fleet
+// ─────────────────────────────────────────────────────────────────────
+
+fn cmd_survey_fleet_validate(args: &[String]) -> Result<String, String> {
+    if args.is_empty() {
+        return Err("survey-fleet-validate: needs <org-root> [--json]".into());
+    }
+    let root = PathBuf::from(&args[0]);
+    let json = args.iter().any(|a| a == "--json");
+
+    let report = survey_fleet_validate(&root).map_err(|e| format!("validate: {e}"))?;
+
+    if json {
+        let s = serde_json::to_string_pretty(&report).map_err(|e| e.to_string())?;
+        println!("{s}");
+        return Ok(format!(
+            "{}/{} candidates roundtripped; {:.1}% failure rate",
+            report.ok,
+            report.total_candidates,
+            report.failure_rate() * 100.0,
+        ));
+    }
+
+    println!("=== tatara-rust-forge survey-fleet-validate ===");
+    println!("Root: {}", report.root.display());
+    println!(
+        "Roundtripped: {}/{} candidates    Failure rate: {:.1}%",
+        report.ok,
+        report.total_candidates,
+        report.failure_rate() * 100.0,
+    );
+    if report.is_clean() {
+        println!("✓ Substrate self-QA: clean. Every fleet candidate survives the discover → apply → re-parse roundtrip.");
+    } else {
+        println!("Failure classes:");
+        for (cls, n) in &report.by_error_class {
+            println!("  {cls:<22} {n}");
+        }
+        println!("─── Top {} failures ───", report.failed.len().min(20));
+        for cv in report.failed.iter().take(20) {
+            let crate_name = cv
+                .crate_path
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_default();
+            let outcome_repr = match &cv.outcome {
+                tatara_rust_survey::ValidateOutcome::Ok => "ok".to_string(),
+                tatara_rust_survey::ValidateOutcome::ApplyFailed(e) => {
+                    format!("apply: {}", e.lines().next().unwrap_or(""))
+                }
+                tatara_rust_survey::ValidateOutcome::OutputUnparseable(e) => {
+                    format!("unparse: {}", e.lines().next().unwrap_or(""))
+                }
+            };
+            println!(
+                "  {:<26}  {:<14}  {}",
+                crate_name,
+                cv.pattern.trim_start_matches("MatchedPattern::"),
+                outcome_repr,
+            );
+        }
+    }
+
+    Ok(format!(
+        "{}/{} candidates roundtripped; {:.1}% failure rate",
+        report.ok,
+        report.total_candidates,
+        report.failure_rate() * 100.0,
     ))
 }
 

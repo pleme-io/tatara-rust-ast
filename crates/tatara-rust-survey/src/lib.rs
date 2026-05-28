@@ -38,8 +38,9 @@ pub use apply::{apply_to_source, ApplyError};
 pub use cargo_deps::{inject_deps, CargoDepsError, DepSource, InjectOutcome};
 pub use detector::{detectors, Detector};
 pub use fleet::{
-    survey_fleet, survey_fleet_apply, CrateSurveyEntry, FleetApplyEntry, FleetApplyOpts,
-    FleetApplyReport, FleetSurveyReport,
+    survey_fleet, survey_fleet_apply, survey_fleet_validate, CandidateValidation,
+    CrateSurveyEntry, FleetApplyEntry, FleetApplyOpts, FleetApplyReport, FleetSurveyReport,
+    FleetValidateReport, ValidateOutcome,
 };
 pub use pipeline::{
     apply_all_to_source, survey_apply_validate, FileOutcome, PipelineError, PipelineOpts,
