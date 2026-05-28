@@ -26,6 +26,7 @@ members = [
   "crates/tatara-rust-gate",
   "crates/tatara-rust-verify",
   "crates/tatara-rust-publish",
+  "crates/tatara-rust-survey",
 ]
 
 [workspace.package]
@@ -63,6 +64,7 @@ tatara-rust-repo        = { path = "crates/tatara-rust-repo" }
 tatara-rust-gate        = { path = "crates/tatara-rust-gate" }
 tatara-rust-verify      = { path = "crates/tatara-rust-verify" }
 tatara-rust-publish     = { path = "crates/tatara-rust-publish" }
+tatara-rust-survey      = { path = "crates/tatara-rust-survey" }
 
 # pleme-io tatara stack
 tatara-lisp        = { git = "https://github.com/pleme-io/tatara-lisp" }

@@ -575,6 +575,7 @@ dependencies = [
  "tatara-rust-publish",
  "tatara-rust-repo",
  "tatara-rust-suite",
+ "tatara-rust-survey",
  "tatara-rust-tlisp",
  "tatara-rust-validate",
  "tatara-rust-verify",
@@ -681,6 +682,17 @@ dependencies = [
  "tatara-rust-macro-rules",
  "tatara-rust-proc-attr",
  "tatara-rust-proc-fn",
+ "thiserror",
+]
+
+[[package]]
+name = "tatara-rust-survey"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "serde",
+ "syn",
  "thiserror",
 ]
 

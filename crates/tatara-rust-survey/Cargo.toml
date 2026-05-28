@@ -1,0 +1,20 @@
+[package]
+name        = "tatara-rust-survey"
+description = "Adoption multiplier — walks Rust source via syn, finds impl blocks that match published farm derives, reports a typed RefactorCandidate punch list. The discovery half of the structured adoption pipeline (discover → apply → validate)."
+version      .workspace = true
+edition      .workspace = true
+rust-version .workspace = true
+license      .workspace = true
+repository   .workspace = true
+homepage     .workspace = true
+authors      .workspace = true
+
+[dependencies]
+syn         = { workspace = true, features = ["visit"] }
+quote       .workspace = true
+proc-macro2 .workspace = true
+serde       .workspace = true
+thiserror   .workspace = true
+
+[lints]
+workspace = true

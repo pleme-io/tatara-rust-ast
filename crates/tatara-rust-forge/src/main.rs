@@ -40,6 +40,7 @@ use tatara_rust_publish::{
     PublishConfig, PublishOutcome, RepoPublishSpec, RepoVisibility, publish_all,
 };
 use tatara_rust_tlisp::{parse_macrocatalog, render_macrocatalog};
+use tatara_rust_survey::survey_tree;
 
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
@@ -78,7 +79,8 @@ fn usage() -> ExitCode {
         tatara-rust-forge catalog-publish-all <catalog.json> --dir <dir> --org <github-org> [--private] [--continue-on-error]\n  \
         tatara-rust-forge catalog-instantiate <catalog.json> --out <dir> [--repo-url-prefix <url>] [--skip-clippy] [--no-gate] [--publish --org <org>]\n  \
         tatara-rust-forge catalog-from-lisp <catalog.lisp> <out.json>   (parse defmacrocatalog → JSON)\n  \
-        tatara-rust-forge catalog-to-lisp <catalog.json> <out.lisp>     (render JSON → defmacrocatalog)"
+        tatara-rust-forge catalog-to-lisp <catalog.json> <out.lisp>     (render JSON → defmacrocatalog)\n  \
+        tatara-rust-forge survey <crate-src-path> [--json]              (scan a Rust crate for derive-adoption candidates)"
     );
     ExitCode::from(2)
 }
@@ -100,6 +102,7 @@ fn main() -> ExitCode {
         "catalog-instantiate" => cmd_catalog_instantiate(rest),
         "catalog-from-lisp" => cmd_catalog_from_lisp(rest),
         "catalog-to-lisp" => cmd_catalog_to_lisp(rest),
+        "survey" => cmd_survey(rest),
         "--help" | "-h" => {
             usage();
             return ExitCode::SUCCESS;
@@ -694,5 +697,62 @@ fn cmd_catalog_to_lisp(args: &[String]) -> Result<String, String> {
         "wrote {} ({} entries) — JSON → (defmacrocatalog)",
         lisp_out,
         catalog.entries.len()
+    ))
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// survey — find derive-adoption candidates in a Rust crate
+// ─────────────────────────────────────────────────────────────────────
+
+fn cmd_survey(args: &[String]) -> Result<String, String> {
+    if args.is_empty() {
+        return Err("survey: needs <crate-src-path> [--json]".into());
+    }
+    let root = PathBuf::from(&args[0]);
+    let json_out = args.iter().any(|a| a == "--json");
+
+    let cands = survey_tree(&root)
+        .map_err(|e| format!("survey {}: {e}", root.display()))?;
+
+    if json_out {
+        let s = serde_json::to_string_pretty(&cands).map_err(|e| format!("serialize: {e}"))?;
+        println!("{s}");
+        return Ok(format!("{} candidates", cands.len()));
+    }
+
+    // Operator-facing punch list.
+    if cands.is_empty() {
+        return Ok(format!(
+            "no derive-adoption candidates found under {}",
+            root.display()
+        ));
+    }
+    println!("# Derive adoption survey: {}\n", root.display());
+    println!("Found {} candidates:\n", cands.len());
+    let mut total_loc = 0;
+    for c in &cands {
+        println!(
+            "  {} (line {}): impl {} → #[derive({})]",
+            c.file.display(),
+            c.line,
+            c.target_type,
+            c.derive_trait,
+        );
+        println!(
+            "    pattern: {:?}  |  add dep: {}  |  ~{} LOC saved",
+            c.pattern, c.derive_crate, c.estimated_loc_saved,
+        );
+        println!();
+        total_loc += c.estimated_loc_saved;
+    }
+    Ok(format!(
+        "{} candidates; ~{} LOC saveable across {} files",
+        cands.len(),
+        total_loc,
+        cands
+            .iter()
+            .map(|c| c.file.clone())
+            .collect::<std::collections::BTreeSet<_>>()
+            .len(),
     ))
 }
