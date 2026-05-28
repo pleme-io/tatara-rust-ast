@@ -83,6 +83,18 @@ pub enum MatchedPattern {
     /// `pub fn is_<variant>(&self) -> bool { matches!(self, Self::<variant>(..) | Self::<variant> { .. } | Self::<variant>) }` per enum variant.
     /// Adopt: `pleme-isvariant-derive` → `#[derive(IsVariant)]`.
     IsVariant,
+    /// `pub fn <field>_mut(&mut self) -> &mut <T> { &mut self.<field> }` per field.
+    /// Adopt: `pleme-asmut-derive` → `#[derive(AsMutAll)]`.
+    AsMutAll,
+    /// `pub fn into_<field>(self) -> <T> { self.<field> }` per field — consuming getter.
+    /// Adopt: `pleme-owned-derive` → `#[derive(OwnedAll)]`.
+    OwnedAll,
+    /// `pub fn replace_<field>(&mut self, v: <T>) -> <T> { std::mem::replace(&mut self.<field>, v) }`.
+    /// Adopt: `pleme-replace-derive` → `#[derive(ReplaceAll)]`.
+    ReplaceAll,
+    /// `pub fn take_<field>(&mut self) -> <T> where <T>: Default { std::mem::take(&mut self.<field>) }`.
+    /// Adopt: `pleme-take-derive` → `#[derive(TakeAll)]`.
+    TakeAll,
 }
 
 impl MatchedPattern {

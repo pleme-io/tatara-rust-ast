@@ -147,14 +147,11 @@ pub fn survey_fleet(root: &Path) -> Result<FleetSurveyReport, SurveyError> {
     })
 }
 
+/// Label for a pattern in the fleet leaderboard. Routed through the
+/// Detector registry so adding a new pattern means zero changes
+/// here — the existing `derive_trait()` is the canonical name.
 fn pattern_label(p: MatchedPattern) -> String {
-    match p {
-        MatchedPattern::GetterAll => "GetterAll",
-        MatchedPattern::SetterAll => "SetterAll",
-        MatchedPattern::WithBuilder => "WithBuilder",
-        MatchedPattern::IsVariant => "IsVariant",
-    }
-    .to_string()
+    p.derive_trait().to_string()
 }
 
 // ─────────────────────────────────────────────────────────────────────

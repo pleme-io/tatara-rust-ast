@@ -40,6 +40,10 @@ pub fn detectors() -> &'static [&'static dyn Detector] {
         &SetterAllDetector,
         &WithBuilderDetector,
         &IsVariantDetector,
+        &AsMutAllDetector,
+        &OwnedAllDetector,
+        &ReplaceAllDetector,
+        &TakeAllDetector,
     ]
 }
 
@@ -255,6 +259,242 @@ fn is_isvariant_shape(f: &ImplItemFn) -> bool {
 }
 
 // ─────────────────────────────────────────────────────────────────────
+// AsMutAll: `pub fn <field>_mut(&mut self) -> &mut <T> { &mut self.<field> }`
+// ─────────────────────────────────────────────────────────────────────
+
+pub struct AsMutAllDetector;
+
+impl Detector for AsMutAllDetector {
+    fn pattern(&self) -> MatchedPattern { MatchedPattern::AsMutAll }
+    fn derive_crate(&self) -> &'static str { "pleme-asmut-derive" }
+    fn derive_trait(&self) -> &'static str { "AsMutAll" }
+    fn matches(&self, f: &ImplItemFn) -> bool {
+        let name = f.sig.ident.to_string();
+        let Some(field) = name.strip_suffix("_mut") else {
+            return false;
+        };
+        is_asmut_shape(f, field)
+    }
+}
+
+fn is_asmut_shape(f: &ImplItemFn, field: &str) -> bool {
+    // Receiver: &mut self.
+    if !matches!(
+        f.sig.inputs.first(),
+        Some(syn::FnArg::Receiver(r)) if r.reference.is_some() && r.mutability.is_some()
+    ) {
+        return false;
+    }
+    if f.sig.inputs.len() != 1 {
+        return false;
+    }
+    // Return: &mut <T>.
+    let syn::ReturnType::Type(_, ret) = &f.sig.output else {
+        return false;
+    };
+    let syn::Type::Reference(tr) = ret.as_ref() else {
+        return false;
+    };
+    if tr.mutability.is_none() {
+        return false;
+    }
+    // Body: single `&mut self.<field>` expression.
+    let stmts = &f.block.stmts;
+    if stmts.len() != 1 {
+        return false;
+    }
+    let syn::Stmt::Expr(expr, None) = &stmts[0] else {
+        return false;
+    };
+    let syn::Expr::Reference(r) = expr else {
+        return false;
+    };
+    if r.mutability.is_none() {
+        return false;
+    }
+    matches_field_access(&r.expr, field)
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// OwnedAll: `pub fn into_<field>(self) -> <T> { self.<field> }`
+// ─────────────────────────────────────────────────────────────────────
+
+pub struct OwnedAllDetector;
+
+impl Detector for OwnedAllDetector {
+    fn pattern(&self) -> MatchedPattern { MatchedPattern::OwnedAll }
+    fn derive_crate(&self) -> &'static str { "pleme-owned-derive" }
+    fn derive_trait(&self) -> &'static str { "OwnedAll" }
+    fn matches(&self, f: &ImplItemFn) -> bool {
+        let name = f.sig.ident.to_string();
+        let Some(field) = name.strip_prefix("into_") else {
+            return false;
+        };
+        is_owned_shape(f, field)
+    }
+}
+
+fn is_owned_shape(f: &ImplItemFn, field: &str) -> bool {
+    // Receiver: `self` (no & no mut).
+    if !matches!(
+        f.sig.inputs.first(),
+        Some(syn::FnArg::Receiver(r)) if r.reference.is_none() && r.mutability.is_none()
+    ) {
+        return false;
+    }
+    if f.sig.inputs.len() != 1 {
+        return false;
+    }
+    // Return: `<T>` (NOT reference) — owned value.
+    let syn::ReturnType::Type(_, ret) = &f.sig.output else {
+        return false;
+    };
+    if matches!(ret.as_ref(), syn::Type::Reference(_)) {
+        return false;
+    }
+    // Body: single `self.<field>` (no `&`).
+    let stmts = &f.block.stmts;
+    if stmts.len() != 1 {
+        return false;
+    }
+    let syn::Stmt::Expr(expr, None) = &stmts[0] else {
+        return false;
+    };
+    // Direct field access, NOT wrapped in Reference.
+    matches!(expr, syn::Expr::Field(_)) && matches_field_access(expr, field)
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// ReplaceAll: `pub fn replace_<field>(&mut self, v: <T>) -> <T> {
+//                 std::mem::replace(&mut self.<field>, v) }`
+// ─────────────────────────────────────────────────────────────────────
+
+pub struct ReplaceAllDetector;
+
+impl Detector for ReplaceAllDetector {
+    fn pattern(&self) -> MatchedPattern { MatchedPattern::ReplaceAll }
+    fn derive_crate(&self) -> &'static str { "pleme-replace-derive" }
+    fn derive_trait(&self) -> &'static str { "ReplaceAll" }
+    fn matches(&self, f: &ImplItemFn) -> bool {
+        let name = f.sig.ident.to_string();
+        let Some(field) = name.strip_prefix("replace_") else {
+            return false;
+        };
+        is_replace_shape(f, field)
+    }
+}
+
+fn is_replace_shape(f: &ImplItemFn, field: &str) -> bool {
+    // Receiver: &mut self.
+    if !matches!(
+        f.sig.inputs.first(),
+        Some(syn::FnArg::Receiver(r)) if r.reference.is_some() && r.mutability.is_some()
+    ) {
+        return false;
+    }
+    if f.sig.inputs.len() != 2 {
+        return false;
+    }
+    // Body: single `std::mem::replace(...)` macro call.
+    let stmts = &f.block.stmts;
+    if stmts.len() != 1 {
+        return false;
+    }
+    let syn::Stmt::Expr(expr, None) = &stmts[0] else {
+        return false;
+    };
+    let syn::Expr::Call(call) = expr else {
+        return false;
+    };
+    let syn::Expr::Path(p) = call.func.as_ref() else {
+        return false;
+    };
+    // Accept `std::mem::replace`, `core::mem::replace`, `::std::mem::replace`, or bare `mem::replace`.
+    if !path_ends_with(&p.path, &["mem", "replace"]) {
+        return false;
+    }
+    // First arg is `&mut self.<field>`.
+    let Some(syn::Expr::Reference(r)) = call.args.first() else {
+        return false;
+    };
+    if r.mutability.is_none() {
+        return false;
+    }
+    matches_field_access(&r.expr, field)
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// TakeAll: `pub fn take_<field>(&mut self) -> <T> { std::mem::take(&mut self.<field>) }`
+// ─────────────────────────────────────────────────────────────────────
+
+pub struct TakeAllDetector;
+
+impl Detector for TakeAllDetector {
+    fn pattern(&self) -> MatchedPattern { MatchedPattern::TakeAll }
+    fn derive_crate(&self) -> &'static str { "pleme-take-derive" }
+    fn derive_trait(&self) -> &'static str { "TakeAll" }
+    fn matches(&self, f: &ImplItemFn) -> bool {
+        let name = f.sig.ident.to_string();
+        let Some(field) = name.strip_prefix("take_") else {
+            return false;
+        };
+        is_take_shape(f, field)
+    }
+}
+
+fn is_take_shape(f: &ImplItemFn, field: &str) -> bool {
+    // Receiver: &mut self.
+    if !matches!(
+        f.sig.inputs.first(),
+        Some(syn::FnArg::Receiver(r)) if r.reference.is_some() && r.mutability.is_some()
+    ) {
+        return false;
+    }
+    if f.sig.inputs.len() != 1 {
+        return false;
+    }
+    let stmts = &f.block.stmts;
+    if stmts.len() != 1 {
+        return false;
+    }
+    let syn::Stmt::Expr(expr, None) = &stmts[0] else {
+        return false;
+    };
+    let syn::Expr::Call(call) = expr else {
+        return false;
+    };
+    let syn::Expr::Path(p) = call.func.as_ref() else {
+        return false;
+    };
+    if !path_ends_with(&p.path, &["mem", "take"]) {
+        return false;
+    }
+    let Some(syn::Expr::Reference(r)) = call.args.first() else {
+        return false;
+    };
+    if r.mutability.is_none() {
+        return false;
+    }
+    matches_field_access(&r.expr, field)
+}
+
+/// Path tail-match helper. `std::mem::replace`, `core::mem::replace`,
+/// `::core::mem::replace`, and `mem::replace` all return true for
+/// `&["mem", "replace"]`. Lets the detectors accept the operator's
+/// preferred std-path prefix without enumerating them.
+fn path_ends_with(p: &syn::Path, tail: &[&str]) -> bool {
+    if p.segments.len() < tail.len() {
+        return false;
+    }
+    let offset = p.segments.len() - tail.len();
+    p.segments
+        .iter()
+        .skip(offset)
+        .zip(tail.iter())
+        .all(|(seg, want)| seg.ident == *want)
+}
+
+// ─────────────────────────────────────────────────────────────────────
 // Shared helpers
 // ─────────────────────────────────────────────────────────────────────
 
@@ -293,7 +533,7 @@ mod tests {
     #[test]
     fn registry_has_one_detector_per_pattern() {
         let dets = detectors();
-        assert_eq!(dets.len(), 4, "registry has exactly the four canonical detectors");
+        assert_eq!(dets.len(), 8, "registry has the eight typed detectors");
         // No two detectors claim the same pattern.
         let mut seen: Vec<MatchedPattern> = vec![];
         for d in dets {
@@ -312,7 +552,68 @@ mod tests {
         let mut crates: Vec<&str> = dets.iter().map(|d| d.derive_crate()).collect();
         crates.sort();
         crates.dedup();
-        assert_eq!(crates.len(), 4, "every detector points at a distinct derive crate");
+        assert_eq!(crates.len(), 8, "every detector points at a distinct derive crate");
+    }
+
+    #[test]
+    fn asmut_detector_matches_canonical_shape() {
+        let f: ImplItemFn = parse_quote! {
+            pub fn host_mut(&mut self) -> &mut String { &mut self.host }
+        };
+        assert!(AsMutAllDetector.matches(&f));
+        // Getter (returns shared ref) must NOT match.
+        let getter: ImplItemFn = parse_quote! {
+            pub fn host(&self) -> &String { &self.host }
+        };
+        assert!(!AsMutAllDetector.matches(&getter));
+    }
+
+    #[test]
+    fn owned_detector_matches_consuming_getter() {
+        let f: ImplItemFn = parse_quote! {
+            pub fn into_host(self) -> String { self.host }
+        };
+        assert!(OwnedAllDetector.matches(&f));
+        // GetterAll returns &, OwnedAll consumes self → reject getter.
+        let getter: ImplItemFn = parse_quote! {
+            pub fn into_host(self) -> String { self.host.clone() }
+        };
+        assert!(!OwnedAllDetector.matches(&getter), "extra call → reject");
+    }
+
+    #[test]
+    fn replace_detector_accepts_std_and_core_paths() {
+        for body in [
+            "{ std::mem::replace(&mut self.host, v) }",
+            "{ ::std::mem::replace(&mut self.host, v) }",
+            "{ core::mem::replace(&mut self.host, v) }",
+            "{ mem::replace(&mut self.host, v) }",
+        ] {
+            let src = format!("pub fn replace_host(&mut self, v: String) -> String {body}");
+            let f: ImplItemFn = syn::parse_str(&src).unwrap();
+            assert!(
+                ReplaceAllDetector.matches(&f),
+                "must match canonical mem::replace shape: {body}"
+            );
+        }
+        // Wrong fn body must NOT match.
+        let bad: ImplItemFn = parse_quote! {
+            pub fn replace_host(&mut self, v: String) -> String { self.host = v; v }
+        };
+        assert!(!ReplaceAllDetector.matches(&bad));
+    }
+
+    #[test]
+    fn take_detector_matches_std_mem_take() {
+        let f: ImplItemFn = parse_quote! {
+            pub fn take_host(&mut self) -> String { std::mem::take(&mut self.host) }
+        };
+        assert!(TakeAllDetector.matches(&f));
+        // Not a take — direct return instead of mem::take.
+        let bad: ImplItemFn = parse_quote! {
+            pub fn take_host(&mut self) -> String { self.host.clone() }
+        };
+        assert!(!TakeAllDetector.matches(&bad));
     }
 
     #[test]
