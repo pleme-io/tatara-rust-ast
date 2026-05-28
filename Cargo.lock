@@ -696,6 +696,7 @@ dependencies = [
  "syn",
  "tatara-rust-gate",
  "thiserror",
+ "toml_edit",
 ]
 
 [[package]]

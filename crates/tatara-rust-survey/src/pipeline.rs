@@ -29,7 +29,10 @@ use std::path::{Path, PathBuf};
 
 use tatara_rust_gate::{green_gate, GateConfig, GateOutcome};
 
-use crate::{apply::ApplyError, apply_to_source, survey_tree, RefactorCandidate, SurveyError};
+use crate::{
+    apply::ApplyError, apply_to_source, cargo_deps, inject_deps, survey_tree, CargoDepsError,
+    DepSource, RefactorCandidate, SurveyError,
+};
 
 /// Apply every [`RefactorCandidate`] for a single file in sequence.
 /// Each apply sees the output of the previous one — so multiple
@@ -80,6 +83,16 @@ pub struct PipelineOpts {
     pub validate: bool,
     /// Gate config — defaults to all three gates (build/test/clippy).
     pub gate_cfg: GateConfig,
+    /// If `true`, after the .rs transforms land, inject every
+    /// applied candidate's `derive_crate` into the crate's
+    /// `Cargo.toml` `[dependencies]`. Without this, the apply lands
+    /// `use pleme_<x>_derive::…` but cargo build fails because the
+    /// dep doesn't exist. Default `true` — set false for crates that
+    /// already declare the deps under workspace inheritance.
+    pub inject_cargo_deps: bool,
+    /// Source for the injected deps. Default is the canonical
+    /// pleme-io git URL on `main`.
+    pub dep_source: DepSource,
 }
 
 impl Default for PipelineOpts {
@@ -88,6 +101,8 @@ impl Default for PipelineOpts {
             write: false,
             validate: true,
             gate_cfg: GateConfig::default(),
+            inject_cargo_deps: true,
+            dep_source: DepSource::default(),
         }
     }
 }
@@ -114,6 +129,10 @@ pub struct PipelineOutcome {
     /// If `true`, files that were written got restored to their
     /// original contents because the gate went red.
     pub rolled_back: bool,
+    /// Outcome of injecting `pleme-*-derive` deps into the crate's
+    /// `Cargo.toml`. `None` when `opts.inject_cargo_deps == false`
+    /// or when the pipeline was a dry run.
+    pub deps_injected: Option<cargo_deps::InjectOutcome>,
 }
 
 impl PipelineOutcome {
@@ -136,6 +155,8 @@ pub enum PipelineError {
     Io(#[from] std::io::Error),
     #[error("gate: {0}")]
     Gate(#[from] tatara_rust_gate::GateError),
+    #[error("cargo-deps: {0}")]
+    CargoDeps(#[from] CargoDepsError),
 }
 
 /// In-memory backup so rollback can restore the original bytes of
@@ -145,10 +166,10 @@ struct FileBackup {
     original: String,
 }
 
-/// Full crate-level survey → apply → validate. Writes only when
-/// `opts.write`; rolls back to backups when `opts.validate` AND the
-/// cargo gate fails. The operator's tree never ends in a
-/// half-applied state.
+/// Full crate-level survey → apply → inject-deps → validate.
+/// Writes only when `opts.write`; rolls back to backups (both `.rs`
+/// AND `Cargo.toml`) when `opts.validate` AND the cargo gate fails.
+/// The operator's tree never ends in a half-applied state.
 pub fn survey_apply_validate(
     crate_root: &Path,
     opts: &PipelineOpts,
@@ -167,6 +188,10 @@ pub fn survey_apply_validate(
     let mut backups: Vec<FileBackup> = vec![];
     let mut total_attempted = 0usize;
     let mut total_applied = 0usize;
+    // Every derive_crate touched by an applied candidate — gets
+    // injected into Cargo.toml so cargo build can resolve the deps.
+    let mut applied_derive_crates: std::collections::BTreeSet<&'static str> =
+        std::collections::BTreeSet::new();
 
     for (file, cands) in &by_file {
         let original = std::fs::read_to_string(file)?;
@@ -183,6 +208,10 @@ pub fn survey_apply_validate(
             });
             std::fs::write(file, &modified)?;
             written = true;
+            // Collect every derive_crate the applied candidates need.
+            for c in cands.iter().take(applied) {
+                applied_derive_crates.insert(c.derive_crate);
+            }
         }
 
         file_outcomes.push(FileOutcome {
@@ -192,6 +221,30 @@ pub fn survey_apply_validate(
             written,
         });
     }
+
+    // Inject Cargo.toml deps so cargo build can resolve them — done
+    // BEFORE the gate so the build sees the deps. Backed up
+    // symmetric to the .rs files so rollback restores everything.
+    let deps_injected = if opts.write && opts.inject_cargo_deps && !applied_derive_crates.is_empty()
+    {
+        let cargo_toml = crate_root.join("Cargo.toml");
+        if cargo_toml.exists() {
+            let cargo_original = std::fs::read_to_string(&cargo_toml)?;
+            let names: Vec<&str> = applied_derive_crates.iter().copied().collect();
+            let outcome = inject_deps(&cargo_toml, &names, opts.dep_source.clone())?;
+            if outcome.changed() {
+                backups.push(FileBackup {
+                    path: cargo_toml,
+                    original: cargo_original,
+                });
+            }
+            Some(outcome)
+        } else {
+            None
+        }
+    } else {
+        None
+    };
 
     // Validate only when we actually wrote — gating with the original
     // source on disk would produce a misleading green.
@@ -222,6 +275,7 @@ pub fn survey_apply_validate(
         total_applied,
         gate,
         rolled_back,
+        deps_injected,
     })
 }
 
@@ -329,6 +383,8 @@ impl Foo {
             write: false,
             validate: false,
             gate_cfg: GateConfig::default(),
+            inject_cargo_deps: true,
+            dep_source: crate::DepSource::default(),
         };
         let out = survey_apply_validate(&crate_root, &opts).unwrap();
         assert!(
@@ -353,6 +409,8 @@ impl Foo {
             write: true,
             validate: false,
             gate_cfg: GateConfig::default(),
+            inject_cargo_deps: false, // legacy test predates dep injection
+            dep_source: crate::DepSource::default(),
         };
         let out = survey_apply_validate(&crate_root, &opts).unwrap();
         assert!(out.total_applied >= 1);
@@ -375,6 +433,7 @@ impl Foo {
             total_applied: 0,
             gate: None,
             rolled_back: false,
+            deps_injected: None,
         };
         assert!(outcome.is_clean_success());
     }
@@ -393,7 +452,45 @@ impl Foo {
                 stderr: "boom".into(),
             }),
             rolled_back: true,
+            deps_injected: None,
         };
         assert!(!outcome.is_clean_success());
+    }
+
+    #[test]
+    fn write_path_injects_pleme_io_git_deps_into_cargo_toml() {
+        let crate_root = tmp_crate("inject-deps", TWO_FIELD_GETTER_SRC, "");
+        let opts = PipelineOpts {
+            write: true,
+            validate: false, // don't actually try to compile against a non-existent git remote
+            gate_cfg: GateConfig::default(),
+            inject_cargo_deps: true,
+            dep_source: crate::DepSource::PlemeIoGit,
+        };
+        let out = survey_apply_validate(&crate_root, &opts).unwrap();
+        assert!(out.total_applied >= 1);
+        let deps = out.deps_injected.expect("deps_injected populated when write=true + opt_in");
+        assert!(deps.changed(), "first apply must add the dep");
+        assert!(deps.added.iter().any(|n| n == "pleme-getter-derive"));
+
+        let cargo_after = std::fs::read_to_string(crate_root.join("Cargo.toml")).unwrap();
+        assert!(cargo_after.contains("pleme-getter-derive"));
+        assert!(cargo_after.contains("github.com/pleme-io/pleme-getter-derive.git"));
+    }
+
+    #[test]
+    fn opt_out_skips_cargo_toml_injection() {
+        let crate_root = tmp_crate("no-inject", TWO_FIELD_GETTER_SRC, "");
+        let opts = PipelineOpts {
+            write: true,
+            validate: false,
+            gate_cfg: GateConfig::default(),
+            inject_cargo_deps: false,
+            dep_source: crate::DepSource::PlemeIoGit,
+        };
+        let out = survey_apply_validate(&crate_root, &opts).unwrap();
+        assert!(out.deps_injected.is_none(), "opt-out leaves deps_injected=None");
+        let cargo_after = std::fs::read_to_string(crate_root.join("Cargo.toml")).unwrap();
+        assert!(!cargo_after.contains("pleme-getter-derive"));
     }
 }

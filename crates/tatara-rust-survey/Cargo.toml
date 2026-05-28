@@ -16,6 +16,7 @@ proc-macro2       .workspace = true
 prettyplease      .workspace = true
 serde             .workspace = true
 thiserror         .workspace = true
+toml_edit         .workspace = true
 tatara-rust-gate  .workspace = true
 
 [lints]

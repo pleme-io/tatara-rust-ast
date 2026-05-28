@@ -84,7 +84,7 @@ fn usage() -> ExitCode {
         tatara-rust-forge catalog-to-lisp <catalog.json> <out.lisp>     (render JSON → defmacrocatalog)\n  \
         tatara-rust-forge survey <crate-src-path> [--json]              (scan a Rust crate for derive-adoption candidates)\n  \
         tatara-rust-forge survey-apply <file.rs> [--write]              (apply the first candidate to a file; --write commits to disk)\n  \
-        tatara-rust-forge survey-apply-all <crate-root> [--write] [--no-validate] [--skip-clippy] (whole-crate survey → apply → validate, rolls back on red gate)\n  \
+        tatara-rust-forge survey-apply-all <crate-root> [--write] [--no-validate] [--skip-clippy] [--no-inject-deps] (whole-crate survey → apply → inject Cargo.toml deps → validate; rolls back on red gate)\n  \
         tatara-rust-forge survey-fleet <org-root> [--threshold N] [--json] (aggregate every crate under org-root; leaderboard sorted by candidate count)"
     );
     ExitCode::from(2)
@@ -826,13 +826,15 @@ fn cmd_survey_apply(args: &[String]) -> Result<String, String> {
 fn cmd_survey_apply_all(args: &[String]) -> Result<String, String> {
     if args.is_empty() {
         return Err(
-            "survey-apply-all: needs <crate-root> [--write] [--no-validate] [--skip-clippy]".into(),
+            "survey-apply-all: needs <crate-root> [--write] [--no-validate] [--skip-clippy] [--no-inject-deps]"
+                .into(),
         );
     }
     let crate_root = PathBuf::from(&args[0]);
     let write = args.iter().any(|a| a == "--write");
     let no_validate = args.iter().any(|a| a == "--no-validate");
     let skip_clippy = args.iter().any(|a| a == "--skip-clippy");
+    let no_inject_deps = args.iter().any(|a| a == "--no-inject-deps");
 
     let mut gate_cfg = GateConfig::default();
     if skip_clippy {
@@ -843,6 +845,8 @@ fn cmd_survey_apply_all(args: &[String]) -> Result<String, String> {
         write,
         validate: !no_validate,
         gate_cfg,
+        inject_cargo_deps: !no_inject_deps,
+        dep_source: tatara_rust_survey::DepSource::default(),
     };
 
     let out = survey_apply_validate(&crate_root, &opts)
@@ -865,6 +869,17 @@ fn cmd_survey_apply_all(args: &[String]) -> Result<String, String> {
         "Candidates: {} attempted, {} applied",
         out.total_candidates, out.total_applied,
     );
+    if let Some(deps) = &out.deps_injected {
+        if deps.changed() {
+            println!(
+                "Deps:   injected {} into Cargo.toml ({})",
+                deps.added.len(),
+                deps.added.join(", "),
+            );
+        } else if !deps.already_present.is_empty() {
+            println!("Deps:   already present ({})", deps.already_present.join(", "));
+        }
+    }
     if let Some(gate) = &out.gate {
         match gate {
             GateOutcome::Passed => println!("Gate:   ✓ passed (build + test{})", if skip_clippy { "" } else { " + clippy" }),
