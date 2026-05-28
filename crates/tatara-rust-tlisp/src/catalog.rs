@@ -371,6 +371,13 @@ fn parse_verifier_hint(s: &str) -> Result<VerifierHint, ParseError> {
         "enum-fold-all-variants" => EnumFoldAllVariants,
         "enum-fold-variant-count" => EnumFoldVariantCount,
         "enum-fold-variant-names" => EnumFoldVariantNames,
+        "enum-fold-variant-str" => EnumFoldVariantStr,
+        "per-field-owned" => PerFieldOwned,
+        "newtype-borrow" => NewtypeBorrow,
+        "newtype-borrow-mut" => NewtypeBorrowMut,
+        "newtype-deref-mut" => NewtypeDerefMut,
+        "newtype-display" => NewtypeDisplay,
+        "newtype-default" => NewtypeDefault,
         other => return Err(ParseError::UnknownHint(other.to_string())),
     })
 }
@@ -741,6 +748,13 @@ fn hint_to_sym(h: VerifierHint) -> &'static str {
         EnumFoldAllVariants => "enum-fold-all-variants",
         EnumFoldVariantCount => "enum-fold-variant-count",
         EnumFoldVariantNames => "enum-fold-variant-names",
+        EnumFoldVariantStr => "enum-fold-variant-str",
+        PerFieldOwned => "per-field-owned",
+        NewtypeBorrow => "newtype-borrow",
+        NewtypeBorrowMut => "newtype-borrow-mut",
+        NewtypeDerefMut => "newtype-deref-mut",
+        NewtypeDisplay => "newtype-display",
+        NewtypeDefault => "newtype-default",
     }
 }
 

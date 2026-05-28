@@ -103,6 +103,21 @@ pub enum VerifierHint {
     EnumFoldVariantCount,
     /// Enum-fold `const NAMES: &[&str]` + `names()`.
     EnumFoldVariantNames,
+    /// `pub fn into_<field>(self) -> <Type>` — per-field consuming getter.
+    PerFieldOwned,
+    /// Newtype `Borrow<Inner>`.
+    NewtypeBorrow,
+    /// Newtype `BorrowMut<Inner>`.
+    NewtypeBorrowMut,
+    /// Newtype `DerefMut` with `Target = Inner` (pairs with NewtypeDeref).
+    NewtypeDerefMut,
+    /// Newtype `Display` — delegates to inner's Display impl.
+    NewtypeDisplay,
+    /// Newtype `Default` where `Inner: Default` — forwards.
+    NewtypeDefault,
+    /// Enum-fold `pub fn as_str(&self) -> &'static str` returning the
+    /// bare variant name. Unit-variant enums only.
+    EnumFoldVariantStr,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

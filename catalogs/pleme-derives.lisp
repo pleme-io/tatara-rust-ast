@@ -192,4 +192,90 @@
         :skip-fields ("last_seqno")
         :field-attribute "invalidating_setter"
       ))
+    (
+      :crate-name "pleme-owned-derive"
+      :description "Per-field consuming getter: pub fn into_<field>(self) -> <Type>. Drops the rest of self, moves the named field out. The owned/consuming dual of GetterAll."
+      :since "0.1.0"
+      :owner "pleme-io"
+      :verifier-hint per-field-owned
+      :kind per-field
+      :spec (
+        :trait-name "OwnedAll"
+        :target named-struct
+        :per-field-template "pub fn #method_ident(self) -> #field_ty { self.#field_name }"
+        :method-name-template "into_{}"
+      ))
+    (
+      :crate-name "pleme-borrow-derive"
+      :description "Newtype Borrow: impl ::std::borrow::Borrow<Inner> for Wrapper. Pairs with HashMap/BTreeMap lookup by inner-typed key."
+      :since "0.1.0"
+      :owner "pleme-io"
+      :verifier-hint newtype-borrow
+      :kind newtype
+      :spec (
+        :trait-name "BorrowNewtype"
+        :target tuple
+        :impl-template "impl ::std::borrow::Borrow<#inner_ty> for #self_name { fn borrow(&self) -> &#inner_ty { &self.0 } }"
+      ))
+    (
+      :crate-name "pleme-borrowmut-derive"
+      :description "Newtype BorrowMut: impl ::std::borrow::BorrowMut<Inner> for Wrapper. Mutable dual of BorrowNewtype."
+      :since "0.1.0"
+      :owner "pleme-io"
+      :verifier-hint newtype-borrow-mut
+      :kind newtype
+      :spec (
+        :trait-name "BorrowMutNewtype"
+        :target tuple
+        :impl-template "impl ::std::borrow::BorrowMut<#inner_ty> for #self_name { fn borrow_mut(&mut self) -> &mut #inner_ty { &mut self.0 } }"
+      ))
+    (
+      :crate-name "pleme-derefmut-derive"
+      :description "Newtype DerefMut: impl ::std::ops::DerefMut for Wrapper. Pairs with DerefNewtype to enable &mut Inner via auto-deref."
+      :since "0.1.0"
+      :owner "pleme-io"
+      :verifier-hint newtype-deref-mut
+      :kind newtype
+      :spec (
+        :trait-name "DerefMutNewtype"
+        :target tuple
+        :impl-template "impl ::std::ops::DerefMut for #self_name { fn deref_mut(&mut self) -> &mut #inner_ty { &mut self.0 } }"
+      ))
+    (
+      :crate-name "pleme-display-derive"
+      :description "Newtype Display: impl ::std::fmt::Display for Wrapper, delegating to the inner value's Display. Eliminates the boilerplate of wrapper.0.fmt(f)."
+      :since "0.1.0"
+      :owner "pleme-io"
+      :verifier-hint newtype-display
+      :kind newtype
+      :spec (
+        :trait-name "DisplayNewtype"
+        :target tuple
+        :impl-template "impl ::std::fmt::Display for #self_name { fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result { ::std::fmt::Display::fmt(&self.0, f) } }"
+      ))
+    (
+      :crate-name "pleme-defaultnewtype-derive"
+      :description "Newtype Default: impl ::std::default::Default for Wrapper where Inner: Default. Different from #[derive(Default)] because it doesn't require Wrapper to be PUB tuple-struct OR to implement Default itself — it forwards through the bound."
+      :since "0.1.0"
+      :owner "pleme-io"
+      :verifier-hint newtype-default
+      :kind newtype
+      :spec (
+        :trait-name "DefaultNewtype"
+        :target tuple
+        :impl-template "impl ::std::default::Default for #self_name where #inner_ty: ::std::default::Default { fn default() -> Self { Self(<#inner_ty as ::std::default::Default>::default()) } }"
+      ))
+    (
+      :crate-name "pleme-variantstr-derive"
+      :description "Enum-fold: pub fn as_str(&self) -> &'static str { match self { Self::A => \"A\", ... } }. Maps each unit variant to its bare name as a static string. Unit-variant enums only."
+      :since "0.1.0"
+      :owner "pleme-io"
+      :verifier-hint enum-fold-variant-str
+      :kind enum-fold
+      :spec (
+        :trait-name "VariantStr"
+        :target unit-variants-only
+        :per-variant-fragment "Self::#variant_name => #variant_str"
+        :fold-template "impl #self_name { pub fn as_str(&self) -> &'static str { match self { #fold } } }"
+      ))
   ))

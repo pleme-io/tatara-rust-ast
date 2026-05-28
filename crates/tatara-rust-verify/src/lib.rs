@@ -143,7 +143,193 @@ fn render_by_hint(hint: VerifierHint, extern_name: &str, trait_name: &str) -> St
         VerifierHint::EnumFoldAllVariants => render_all_variants_smoke(extern_name, trait_name),
         VerifierHint::EnumFoldVariantCount => render_variant_count_smoke(extern_name, trait_name),
         VerifierHint::EnumFoldVariantNames => render_variant_names_smoke(extern_name, trait_name),
+        VerifierHint::EnumFoldVariantStr => render_variant_str_smoke(extern_name, trait_name),
+        VerifierHint::PerFieldOwned => render_owned_smoke(extern_name, trait_name),
+        VerifierHint::NewtypeBorrow => render_borrow_newtype_smoke(extern_name, trait_name),
+        VerifierHint::NewtypeBorrowMut => render_borrow_mut_newtype_smoke(extern_name, trait_name),
+        VerifierHint::NewtypeDerefMut => render_deref_mut_newtype_smoke(extern_name, trait_name),
+        VerifierHint::NewtypeDisplay => render_display_newtype_smoke(extern_name, trait_name),
+        VerifierHint::NewtypeDefault => render_default_newtype_smoke(extern_name, trait_name),
     }
+}
+
+/// `pub fn into_<field>(self) -> <T>` consuming-getter smoke.
+fn render_owned_smoke(extern_name: &str, trait_name: &str) -> String {
+    format!(
+        r#"    use {extern_name}::{trait_name};
+
+    #[derive({trait_name})]
+    pub struct Sample {{
+        pub host: String,
+        pub port: u16,
+    }}
+
+    #[cfg(test)]
+    mod tests {{
+        use super::*;
+        #[test]
+        fn into_field_consumes_and_returns_value() {{
+            let s = Sample {{ host: "h".into(), port: 443 }};
+            let h = s.into_host();
+            assert_eq!(h, "h");
+        }}
+    }}
+"#
+    )
+}
+
+/// Newtype `Borrow<Inner>` smoke.
+fn render_borrow_newtype_smoke(extern_name: &str, trait_name: &str) -> String {
+    format!(
+        r#"    use {extern_name}::{trait_name};
+    use ::std::borrow::Borrow;
+
+    #[derive({trait_name})]
+    pub struct W(pub String);
+
+    #[cfg(test)]
+    mod tests {{
+        use super::*;
+        #[test]
+        fn borrow_returns_inner_ref() {{
+            let w = W("hi".into());
+            let inner: &String = w.borrow();
+            assert_eq!(inner, "hi");
+        }}
+    }}
+"#
+    )
+}
+
+/// Newtype `BorrowMut<Inner>` smoke. std requires `BorrowMut: Borrow`,
+/// so the consumer must hand-impl Borrow OR derive a sibling that
+/// provides it; we hand-impl here to keep the smoke self-contained.
+fn render_borrow_mut_newtype_smoke(extern_name: &str, trait_name: &str) -> String {
+    format!(
+        r#"    use {extern_name}::{trait_name};
+    use ::std::borrow::{{Borrow, BorrowMut}};
+
+    #[derive({trait_name})]
+    pub struct W(pub String);
+    impl Borrow<String> for W {{
+        fn borrow(&self) -> &String {{ &self.0 }}
+    }}
+
+    #[cfg(test)]
+    mod tests {{
+        use super::*;
+        #[test]
+        fn borrow_mut_returns_inner_mut_ref() {{
+            let mut w = W("hi".into());
+            let inner: &mut String = <W as BorrowMut<String>>::borrow_mut(&mut w);
+            inner.push('!');
+            assert_eq!(w.0, "hi!");
+        }}
+    }}
+"#
+    )
+}
+
+/// Newtype `DerefMut` smoke (pairs with NewtypeDeref — caller must
+/// also derive that or hand-impl Deref since DerefMut requires it).
+fn render_deref_mut_newtype_smoke(extern_name: &str, trait_name: &str) -> String {
+    format!(
+        r#"    use {extern_name}::{trait_name};
+    use ::std::ops::{{Deref, DerefMut}};
+
+    pub struct W(pub String);
+    impl Deref for W {{
+        type Target = String;
+        fn deref(&self) -> &String {{ &self.0 }}
+    }}
+    impl ::std::ops::DerefMut for W {{
+        fn deref_mut(&mut self) -> &mut String {{ &mut self.0 }}
+    }}
+
+    // The actual derive smoke — apply to a separate type via the macro.
+    #[derive({trait_name})]
+    pub struct V(pub String);
+    impl Deref for V {{
+        type Target = String;
+        fn deref(&self) -> &String {{ &self.0 }}
+    }}
+
+    #[cfg(test)]
+    mod tests {{
+        use super::*;
+        #[test]
+        fn deref_mut_works_via_macro() {{
+            let mut v = V("hi".into());
+            v.push('!');
+            assert_eq!(v.0, "hi!");
+        }}
+    }}
+"#
+    )
+}
+
+/// Newtype `Display` (delegates to inner) smoke.
+fn render_display_newtype_smoke(extern_name: &str, trait_name: &str) -> String {
+    format!(
+        r#"    use {extern_name}::{trait_name};
+
+    #[derive({trait_name})]
+    pub struct W(pub String);
+
+    #[cfg(test)]
+    mod tests {{
+        use super::*;
+        #[test]
+        fn display_delegates_to_inner() {{
+            let w = W("hi".into());
+            assert_eq!(format!("{{w}}"), "hi");
+        }}
+    }}
+"#
+    )
+}
+
+/// Newtype `Default where Inner: Default` smoke.
+fn render_default_newtype_smoke(extern_name: &str, trait_name: &str) -> String {
+    format!(
+        r#"    use {extern_name}::{trait_name};
+
+    #[derive({trait_name})]
+    pub struct W(pub String);
+
+    #[cfg(test)]
+    mod tests {{
+        use super::*;
+        #[test]
+        fn default_forwards_to_inner() {{
+            let w = W::default();
+            assert_eq!(w.0, "");
+        }}
+    }}
+"#
+    )
+}
+
+/// Enum-fold `as_str() -> &'static str` (per-variant name) smoke.
+fn render_variant_str_smoke(extern_name: &str, trait_name: &str) -> String {
+    format!(
+        r#"    use {extern_name}::{trait_name};
+
+    #[derive({trait_name})]
+    pub enum Status {{ Active, Pending, Done }}
+
+    #[cfg(test)]
+    mod tests {{
+        use super::*;
+        #[test]
+        fn as_str_returns_variant_name() {{
+            assert_eq!(Status::Active.as_str(), "Active");
+            assert_eq!(Status::Pending.as_str(), "Pending");
+            assert_eq!(Status::Done.as_str(), "Done");
+        }}
+    }}
+"#
+    )
 }
 
 /// Canonical InvalidatingSetter smoke — sample struct includes
