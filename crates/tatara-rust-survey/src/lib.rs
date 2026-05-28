@@ -30,8 +30,10 @@ use std::path::{Path, PathBuf};
 use syn::visit::Visit;
 
 pub mod apply;
+pub mod fleet;
 pub mod pipeline;
 pub use apply::{apply_to_source, ApplyError};
+pub use fleet::{survey_fleet, CrateSurveyEntry, FleetSurveyReport};
 pub use pipeline::{
     apply_all_to_source, survey_apply_validate, FileOutcome, PipelineError, PipelineOpts,
     PipelineOutcome,

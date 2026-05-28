@@ -41,7 +41,7 @@ use tatara_rust_publish::{
 };
 use tatara_rust_tlisp::{parse_macrocatalog, render_macrocatalog};
 use tatara_rust_survey::{
-    apply_to_source, survey_apply_validate, survey_file, survey_tree, PipelineOpts,
+    apply_to_source, survey_apply_validate, survey_file, survey_fleet, survey_tree, PipelineOpts,
 };
 
 #[derive(Serialize, Deserialize)]
@@ -84,7 +84,8 @@ fn usage() -> ExitCode {
         tatara-rust-forge catalog-to-lisp <catalog.json> <out.lisp>     (render JSON → defmacrocatalog)\n  \
         tatara-rust-forge survey <crate-src-path> [--json]              (scan a Rust crate for derive-adoption candidates)\n  \
         tatara-rust-forge survey-apply <file.rs> [--write]              (apply the first candidate to a file; --write commits to disk)\n  \
-        tatara-rust-forge survey-apply-all <crate-root> [--write] [--no-validate] [--skip-clippy] (whole-crate survey → apply → validate, rolls back on red gate)"
+        tatara-rust-forge survey-apply-all <crate-root> [--write] [--no-validate] [--skip-clippy] (whole-crate survey → apply → validate, rolls back on red gate)\n  \
+        tatara-rust-forge survey-fleet <org-root> [--threshold N] [--json] (aggregate every crate under org-root; leaderboard sorted by candidate count)"
     );
     ExitCode::from(2)
 }
@@ -109,6 +110,7 @@ fn main() -> ExitCode {
         "survey" => cmd_survey(rest),
         "survey-apply" => cmd_survey_apply(rest),
         "survey-apply-all" => cmd_survey_apply_all(rest),
+        "survey-fleet" => cmd_survey_fleet(rest),
         "--help" | "-h" => {
             usage();
             return ExitCode::SUCCESS;
@@ -902,4 +904,89 @@ fn cmd_survey_apply_all(args: &[String]) -> Result<String, String> {
             },
         ))
     }
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// survey-fleet — aggregate every crate under an org directory
+// ─────────────────────────────────────────────────────────────────────
+
+fn cmd_survey_fleet(args: &[String]) -> Result<String, String> {
+    if args.is_empty() {
+        return Err("survey-fleet: needs <org-root> [--threshold N] [--json]".into());
+    }
+    let root = PathBuf::from(&args[0]);
+    let json = args.iter().any(|a| a == "--json");
+    let threshold: usize = {
+        let mut t = 1usize;
+        let mut it = args.iter();
+        while let Some(a) = it.next() {
+            if a == "--threshold" {
+                if let Some(n) = it.next() {
+                    t = n.parse().map_err(|e| format!("--threshold: {e}"))?;
+                }
+            }
+        }
+        t
+    };
+
+    let report = survey_fleet(&root).map_err(|e| format!("fleet: {e}"))?;
+
+    if json {
+        let s = serde_json::to_string_pretty(&report).map_err(|e| e.to_string())?;
+        println!("{s}");
+        return Ok(format!(
+            "{} crates scanned; {} with ≥{} candidates",
+            report.crates_scanned,
+            report.entries_at_least(threshold).len(),
+            threshold,
+        ));
+    }
+
+    println!("=== tatara-rust-forge survey-fleet ===");
+    println!("Root: {}", report.root.display());
+    println!(
+        "Scanned: {} Cargo crates    With candidates: {}",
+        report.crates_scanned, report.crates_with_candidates,
+    );
+    println!(
+        "Totals: {} candidates    ~{} LOC saveable",
+        report.total_candidates, report.total_loc_saved,
+    );
+    println!("Pattern totals:");
+    for (pat, n) in &report.pattern_totals {
+        println!("  {pat:<14} {n}");
+    }
+    println!();
+
+    let above = report.entries_at_least(threshold);
+    if above.is_empty() {
+        println!("No crates ≥ threshold ({threshold}).");
+    } else {
+        println!("─── Leaderboard (≥ {threshold} candidates) ───");
+        println!("{:>4}  {:>4}  {:<60}  patterns", "cand", "loc", "crate");
+        for e in &above {
+            let breakdown: Vec<String> = e
+                .pattern_breakdown
+                .iter()
+                .map(|(p, n)| format!("{p}:{n}"))
+                .collect();
+            println!(
+                "{:>4}  {:>4}  {:<60}  {}",
+                e.candidate_count,
+                e.loc_saved,
+                e.crate_path
+                    .file_name()
+                    .map(|n| n.to_string_lossy().to_string())
+                    .unwrap_or_else(|| e.crate_path.display().to_string()),
+                breakdown.join(" "),
+            );
+        }
+    }
+
+    Ok(format!(
+        "{} crates ≥ threshold ({}); {} total candidates fleet-wide",
+        above.len(),
+        threshold,
+        report.total_candidates,
+    ))
 }
