@@ -1,0 +1,22 @@
+[package]
+name        = "tatara-rust-examples"
+description = "Worked-example macro Specs — the real-world primitives the platform ships. Each example is a typed Spec authored once that compiles to a publishable Cargo crate. Tested end-to-end against a consumer crate via `cargo test`."
+version      .workspace = true
+edition      .workspace = true
+rust-version .workspace = true
+license      .workspace = true
+repository   .workspace = true
+homepage     .workspace = true
+authors      .workspace = true
+
+[dependencies]
+tatara-rust-ast    .workspace = true
+tatara-rust-derive .workspace = true
+tatara-rust-suite  .workspace = true
+
+[dev-dependencies]
+serde_json           .workspace = true
+tatara-rust-snapshot .workspace = true
+
+[lints]
+workspace = true

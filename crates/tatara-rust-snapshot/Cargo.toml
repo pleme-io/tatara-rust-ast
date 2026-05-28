@@ -1,0 +1,23 @@
+[package]
+name        = "tatara-rust-snapshot"
+description = "Golden-file snapshot harness for every macro Spec — render the scaffold, snapshot every emitted file, commit. Drift caught by `cargo test`. Lifts the per-file `insta::assert_snapshot!` boilerplate into one call per Spec."
+version      .workspace = true
+edition      .workspace = true
+rust-version .workspace = true
+license      .workspace = true
+repository   .workspace = true
+homepage     .workspace = true
+authors      .workspace = true
+
+[dependencies]
+tatara-rust-ast .workspace = true
+insta           .workspace = true
+proc-macro2     .workspace = true
+thiserror       .workspace = true
+
+[dev-dependencies]
+tatara-rust-derive   .workspace = true
+tatara-rust-examples .workspace = true
+
+[lints]
+workspace = true

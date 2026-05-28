@@ -1,0 +1,16 @@
+[package]
+name        = "tatara-rust-caixa"
+description = "Wrap any generated proc-macro crate as a pleme-io caixa — emits a `caixa.lisp` of kind Biblioteca so the SDLC release pipeline (caixa-publish + crates.io) auto-publishes it on every merge."
+version      .workspace = true
+edition      .workspace = true
+rust-version .workspace = true
+license      .workspace = true
+repository   .workspace = true
+homepage     .workspace = true
+authors      .workspace = true
+
+[dependencies]
+tatara-rust-ast .workspace = true
+
+[lints]
+workspace = true

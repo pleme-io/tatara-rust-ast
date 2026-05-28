@@ -1,0 +1,20 @@
+[package]
+name        = "tatara-rust-composite"
+description = "L2 composition primitive — one `#[derive(Bundle)]` fans out to N inner ProcDerive/PerField/PerVariant Specs. Lifts what users today get from `#[derive(A, B, C)]` into typed data."
+version      .workspace = true
+edition      .workspace = true
+rust-version .workspace = true
+license      .workspace = true
+repository   .workspace = true
+homepage     .workspace = true
+authors      .workspace = true
+
+[dependencies]
+tatara-rust-ast    .workspace = true
+tatara-rust-derive .workspace = true
+serde              .workspace = true
+serde_json         .workspace = true
+thiserror          .workspace = true
+
+[lints]
+workspace = true

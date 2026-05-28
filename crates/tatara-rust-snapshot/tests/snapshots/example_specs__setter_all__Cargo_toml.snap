@@ -1,0 +1,18 @@
+---
+source: crates/tatara-rust-snapshot/tests/example_specs.rs
+expression: "& __f.contents"
+---
+[package]
+name = "setter-all-derive"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "Per-field derive proc-macro emitted from a tatara-rust-derive PerFieldDeriveSpec."
+
+[lib]
+proc-macro = true
+
+[dependencies]
+proc-macro2 = "1"
+quote = "1"
+syn = { version = "2", features = ["full", "extra-traits"] }

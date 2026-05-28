@@ -1,0 +1,16 @@
+[package]
+name        = "tatara-rust-flake"
+description = "Emit a substrate-shaped `flake.nix` alongside any generated proc-macro crate. Single function: takes a CrateScaffold and adds `flake.nix` + (optional) `default.nix` so consumers can `nix build` the emitted crate without hand-writing flakes."
+version      .workspace = true
+edition      .workspace = true
+rust-version .workspace = true
+license      .workspace = true
+repository   .workspace = true
+homepage     .workspace = true
+authors      .workspace = true
+
+[dependencies]
+tatara-rust-ast .workspace = true
+
+[lints]
+workspace = true

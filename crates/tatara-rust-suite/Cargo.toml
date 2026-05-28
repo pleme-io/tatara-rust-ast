@@ -1,0 +1,23 @@
+[package]
+name        = "tatara-rust-suite"
+description = "L5 bundle primitive — pack N macro Specs (derive / proc-attr / proc-fn / macro-rules) into one publishable Cargo workspace via a single `compile_to_workspace` call."
+version      .workspace = true
+edition      .workspace = true
+rust-version .workspace = true
+license      .workspace = true
+repository   .workspace = true
+homepage     .workspace = true
+authors      .workspace = true
+
+[dependencies]
+tatara-rust-ast         .workspace = true
+tatara-rust-derive      .workspace = true
+tatara-rust-proc-attr   .workspace = true
+tatara-rust-proc-fn     .workspace = true
+tatara-rust-macro-rules .workspace = true
+serde                   .workspace = true
+serde_json              .workspace = true
+thiserror               .workspace = true
+
+[lints]
+workspace = true

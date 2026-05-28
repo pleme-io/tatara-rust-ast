@@ -1,0 +1,22 @@
+[package]
+name        = "tatara-rust-repo"
+description = "Per-repo decoration primitive — composes CrateScaffold + flake + caixa + clippy-format-ban + LICENSE + .gitignore + README into a publishable OSS repo scaffold. One typed Spec, one fluent builder."
+version      .workspace = true
+edition      .workspace = true
+rust-version .workspace = true
+license      .workspace = true
+repository   .workspace = true
+homepage     .workspace = true
+authors      .workspace = true
+
+[dependencies]
+tatara-rust-ast   .workspace = true
+tatara-rust-flake .workspace = true
+tatara-rust-caixa .workspace = true
+serde             .workspace = true
+
+[dev-dependencies]
+serde_json .workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,17 @@
+[package]
+name        = "tatara-rust-publish"
+description = "Typed GitHub publish primitive — for each materialized repo, performs `git init && git add && git commit && gh repo create --push` (idempotent). Wraps git+gh CLIs in a typed surface per the NO SHELL prime directive. Peer of tatara-rust-gate's cargo wrapper."
+version      .workspace = true
+edition      .workspace = true
+rust-version .workspace = true
+license      .workspace = true
+repository   .workspace = true
+homepage     .workspace = true
+authors      .workspace = true
+
+[dependencies]
+serde     .workspace = true
+thiserror .workspace = true
+
+[lints]
+workspace = true

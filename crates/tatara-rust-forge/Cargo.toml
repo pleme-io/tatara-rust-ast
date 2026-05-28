@@ -1,0 +1,34 @@
+[package]
+name        = "tatara-rust-forge"
+description = "Operator CLI — read a tagged-JSON macro Spec (any L2 kind or an L5 MacroSuiteSpec) and materialize the Cargo crate/workspace to disk."
+version      .workspace = true
+edition      .workspace = true
+rust-version .workspace = true
+license      .workspace = true
+repository   .workspace = true
+homepage     .workspace = true
+authors      .workspace = true
+
+[[bin]]
+name = "tatara-rust-forge"
+path = "src/main.rs"
+
+[dependencies]
+tatara-rust-ast         .workspace = true
+tatara-rust-derive      .workspace = true
+tatara-rust-proc-attr   .workspace = true
+tatara-rust-proc-fn     .workspace = true
+tatara-rust-macro-rules .workspace = true
+tatara-rust-suite       .workspace = true
+tatara-rust-catalog     .workspace = true
+tatara-rust-validate    .workspace = true
+tatara-rust-repo        .workspace = true
+tatara-rust-gate        .workspace = true
+tatara-rust-verify      .workspace = true
+tatara-rust-publish     .workspace = true
+serde                   .workspace = true
+serde_json              .workspace = true
+thiserror               .workspace = true
+
+[lints]
+workspace = true

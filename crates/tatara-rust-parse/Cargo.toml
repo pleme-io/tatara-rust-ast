@@ -1,0 +1,21 @@
+[package]
+name        = "tatara-rust-parse"
+description = "L1.5 round-trip parsing — `syn::X` → typed Rust AST nodes via the FromSyn trait. Closes the round-trip loop for property tests."
+version      .workspace = true
+edition      .workspace = true
+rust-version .workspace = true
+license      .workspace = true
+repository   .workspace = true
+homepage     .workspace = true
+authors      .workspace = true
+
+[dependencies]
+tatara-rust-ast .workspace = true
+proc-macro2     .workspace = true
+syn             .workspace = true
+
+[dev-dependencies]
+quote .workspace = true
+
+[lints]
+workspace = true

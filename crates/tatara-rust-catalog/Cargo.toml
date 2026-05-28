@@ -1,0 +1,27 @@
+[package]
+name        = "tatara-rust-catalog"
+description = "Fleet-aware macro registry — `MacroCatalogSpec` lists every (name, kind, spec, docs) the platform ships. Materializes to a JSON manifest + Markdown docs directory + a workspace Cargo.toml referencing every emitted crate."
+version      .workspace = true
+edition      .workspace = true
+rust-version .workspace = true
+license      .workspace = true
+repository   .workspace = true
+homepage     .workspace = true
+authors      .workspace = true
+
+[dependencies]
+tatara-rust-ast         .workspace = true
+tatara-rust-derive      .workspace = true
+tatara-rust-proc-attr   .workspace = true
+tatara-rust-proc-fn     .workspace = true
+tatara-rust-macro-rules .workspace = true
+tatara-rust-composite   .workspace = true
+tatara-rust-suite       .workspace = true
+tatara-rust-validate    .workspace = true
+tatara-rust-repo        .workspace = true
+serde                   .workspace = true
+serde_json              .workspace = true
+thiserror               .workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,24 @@
+[package]
+name        = "tatara-rust-validate"
+description = "Typed `Violation` enum + per-Spec `Validate` impls. Every macro Spec gets structural correctness checks BEFORE materialization — empty trait names, unbound splice holes, duplicate bundle members, malformed crate names. Forge refuses to write specs with violations."
+version      .workspace = true
+edition      .workspace = true
+rust-version .workspace = true
+license      .workspace = true
+repository   .workspace = true
+homepage     .workspace = true
+authors      .workspace = true
+
+[dependencies]
+tatara-rust-ast         .workspace = true
+tatara-rust-derive      .workspace = true
+tatara-rust-proc-attr   .workspace = true
+tatara-rust-proc-fn     .workspace = true
+tatara-rust-macro-rules .workspace = true
+tatara-rust-composite   .workspace = true
+serde                   .workspace = true
+serde_json              .workspace = true
+thiserror               .workspace = true
+
+[lints]
+workspace = true

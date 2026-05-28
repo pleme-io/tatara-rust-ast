@@ -1,0 +1,21 @@
+[package]
+name        = "tatara-rust-emit"
+description = "L1 emission helpers — typed Rust AST → formatted source (proc-macro2 + prettyplease). Wraps the ToRustTokens trait into operator-facing `emit_file` / `emit_to_path`."
+version      .workspace = true
+edition      .workspace = true
+rust-version .workspace = true
+license      .workspace = true
+repository   .workspace = true
+homepage     .workspace = true
+authors      .workspace = true
+
+[dependencies]
+tatara-rust-ast .workspace = true
+proc-macro2     .workspace = true
+quote           .workspace = true
+syn             .workspace = true
+prettyplease    .workspace = true
+thiserror       .workspace = true
+
+[lints]
+workspace = true

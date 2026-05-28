@@ -1,0 +1,17 @@
+[package]
+name        = "tatara-rust-dsl"
+description = "Operator-friendly declarative-macro DSL for constructing typed macro Specs. `defperfield! { GetterAll: \"...\" }` becomes a PerFieldDeriveSpec literal."
+version      .workspace = true
+edition      .workspace = true
+rust-version .workspace = true
+license      .workspace = true
+repository   .workspace = true
+homepage     .workspace = true
+authors      .workspace = true
+
+[dependencies]
+tatara-rust-ast    .workspace = true
+tatara-rust-derive .workspace = true
+
+[lints]
+workspace = true

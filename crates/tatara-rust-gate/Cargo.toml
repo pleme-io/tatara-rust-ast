@@ -1,0 +1,17 @@
+[package]
+name        = "tatara-rust-gate"
+description = "Green-gate runner — for each materialized repo, runs `cargo build && cargo test && cargo clippy -- -D warnings`. Fail-fast batch primitive. The forcing function between `catalog-emit-repos` and `publish-bulk`."
+version      .workspace = true
+edition      .workspace = true
+rust-version .workspace = true
+license      .workspace = true
+repository   .workspace = true
+homepage     .workspace = true
+authors      .workspace = true
+
+[dependencies]
+thiserror .workspace = true
+serde     .workspace = true
+
+[lints]
+workspace = true

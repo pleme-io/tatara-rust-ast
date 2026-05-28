@@ -548,6 +548,7 @@ dependencies = [
  "serde_json",
  "tatara-rust-ast",
  "tatara-rust-derive",
+ "tatara-rust-snapshot",
  "tatara-rust-suite",
 ]
 
@@ -661,6 +662,7 @@ name = "tatara-rust-snapshot"
 version = "0.1.0"
 dependencies = [
  "insta",
+ "proc-macro2",
  "tatara-rust-ast",
  "tatara-rust-derive",
  "tatara-rust-examples",

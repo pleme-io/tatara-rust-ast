@@ -1,0 +1,98 @@
+[workspace]
+resolver = "2"
+members = [
+  "crates/tatara-rust-ast",
+  "crates/tatara-rust-emit",
+  "crates/tatara-rust-parse",
+  "crates/tatara-rust-derive",
+  "crates/tatara-rust-proc-attr",
+  "crates/tatara-rust-proc-fn",
+  "crates/tatara-rust-macro-rules",
+  "crates/tatara-rust-suite",
+  "crates/tatara-rust-tlisp",
+  "crates/tatara-rust-composite",
+  "crates/tatara-rust-dsl",
+  "crates/tatara-rust-flake",
+  "crates/tatara-rust-caixa",
+  "crates/tatara-rust-validate",
+  "crates/tatara-rust-catalog",
+  "crates/tatara-rust-attr",
+  "crates/tatara-rust-examples",
+  "crates/tatara-rust-forge",
+  "crates/tatara-rust-test",
+  "crates/tatara-rust-snapshot",
+  "crates/tatara-rust-proptest",
+  "crates/tatara-rust-repo",
+  "crates/tatara-rust-gate",
+  "crates/tatara-rust-verify",
+  "crates/tatara-rust-publish",
+]
+
+[workspace.package]
+version       = "0.1.0"
+edition       = "2024"
+rust-version  = "1.89.0"
+license       = "MIT"
+repository    = "https://github.com/pleme-io/tatara-rust-ast"
+homepage      = "https://github.com/pleme-io/tatara-rust-ast"
+authors       = ["pleme-io"]
+
+[workspace.dependencies]
+# Sibling crates
+tatara-rust-ast         = { path = "crates/tatara-rust-ast" }
+tatara-rust-emit        = { path = "crates/tatara-rust-emit" }
+tatara-rust-parse       = { path = "crates/tatara-rust-parse" }
+tatara-rust-derive      = { path = "crates/tatara-rust-derive" }
+tatara-rust-proc-attr   = { path = "crates/tatara-rust-proc-attr" }
+tatara-rust-proc-fn     = { path = "crates/tatara-rust-proc-fn" }
+tatara-rust-macro-rules = { path = "crates/tatara-rust-macro-rules" }
+tatara-rust-suite       = { path = "crates/tatara-rust-suite" }
+tatara-rust-tlisp       = { path = "crates/tatara-rust-tlisp" }
+tatara-rust-composite   = { path = "crates/tatara-rust-composite" }
+tatara-rust-dsl         = { path = "crates/tatara-rust-dsl" }
+tatara-rust-flake       = { path = "crates/tatara-rust-flake" }
+tatara-rust-caixa       = { path = "crates/tatara-rust-caixa" }
+tatara-rust-validate    = { path = "crates/tatara-rust-validate" }
+tatara-rust-catalog     = { path = "crates/tatara-rust-catalog" }
+tatara-rust-attr        = { path = "crates/tatara-rust-attr" }
+tatara-rust-examples    = { path = "crates/tatara-rust-examples" }
+tatara-rust-test        = { path = "crates/tatara-rust-test" }
+tatara-rust-snapshot    = { path = "crates/tatara-rust-snapshot" }
+tatara-rust-proptest    = { path = "crates/tatara-rust-proptest" }
+tatara-rust-repo        = { path = "crates/tatara-rust-repo" }
+tatara-rust-gate        = { path = "crates/tatara-rust-gate" }
+tatara-rust-verify      = { path = "crates/tatara-rust-verify" }
+tatara-rust-publish     = { path = "crates/tatara-rust-publish" }
+
+# pleme-io tatara stack
+tatara-lisp        = { git = "https://github.com/pleme-io/tatara-lisp" }
+tatara-lisp-derive = { git = "https://github.com/pleme-io/tatara-lisp" }
+
+# Rust macro plumbing — only used by L1 emit + L3 test
+proc-macro2 = "1"
+quote       = "1"
+syn         = { version = "2", features = ["full", "extra-traits", "parsing", "printing"] }
+prettyplease = "0.2"
+
+# Standard pleme-io fleet libs (extracted patterns; we earn the dep)
+thiserror   = "2"
+indexmap    = { version = "2", features = ["serde"] }
+serde       = { version = "1", features = ["derive"] }
+serde_json  = "1"
+toml        = "0.8"
+
+# Test layer
+insta       = { version = "1", features = ["yaml"] }
+proptest    = "1"
+trybuild    = "1"
+
+[workspace.lints.clippy]
+pedantic                = { level = "warn", priority = -1 }
+module_name_repetitions = "allow"
+missing_errors_doc      = "allow"
+
+[profile.release]
+opt-level     = "z"
+lto           = true
+codegen-units = 1
+strip         = true

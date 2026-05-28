@@ -1,0 +1,19 @@
+[package]
+name        = "tatara-rust-proc-fn"
+description = "L2 function-like proc-macro authoring — typed `ProcFnSpec` compiles to a proc-macro crate exposing `my_macro!(…)` invocations."
+version      .workspace = true
+edition      .workspace = true
+rust-version .workspace = true
+license      .workspace = true
+repository   .workspace = true
+homepage     .workspace = true
+authors      .workspace = true
+
+[dependencies]
+tatara-rust-ast .workspace = true
+serde           .workspace = true
+serde_json      .workspace = true
+thiserror       .workspace = true
+
+[lints]
+workspace = true
