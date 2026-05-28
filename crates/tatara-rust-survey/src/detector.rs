@@ -44,6 +44,8 @@ pub fn detectors() -> &'static [&'static dyn Detector] {
         &OwnedAllDetector,
         &ReplaceAllDetector,
         &TakeAllDetector,
+        &ResetAllDetector,
+        &SwapAllDetector,
     ]
 }
 
@@ -478,6 +480,135 @@ fn is_take_shape(f: &ImplItemFn, field: &str) -> bool {
     matches_field_access(&r.expr, field)
 }
 
+// ─────────────────────────────────────────────────────────────────────
+// ResetAll: `pub fn reset_<field>(&mut self) where <T>: Default {
+//               self.<field> = <T>::default() }`
+// ─────────────────────────────────────────────────────────────────────
+
+pub struct ResetAllDetector;
+
+impl Detector for ResetAllDetector {
+    fn pattern(&self) -> MatchedPattern { MatchedPattern::ResetAll }
+    fn derive_crate(&self) -> &'static str { "pleme-reset-derive" }
+    fn derive_trait(&self) -> &'static str { "ResetAll" }
+    fn matches(&self, f: &ImplItemFn) -> bool {
+        let name = f.sig.ident.to_string();
+        let Some(field) = name.strip_prefix("reset_") else {
+            return false;
+        };
+        is_reset_shape(f, field)
+    }
+}
+
+fn is_reset_shape(f: &ImplItemFn, field: &str) -> bool {
+    // Receiver: &mut self.
+    if !matches!(
+        f.sig.inputs.first(),
+        Some(syn::FnArg::Receiver(r)) if r.reference.is_some() && r.mutability.is_some()
+    ) {
+        return false;
+    }
+    if f.sig.inputs.len() != 1 {
+        return false;
+    }
+    // Return: () — the reset method doesn't return anything.
+    if !matches!(f.sig.output, syn::ReturnType::Default) {
+        return false;
+    }
+    // Body: single `self.<field> = <T>::default()` style assignment.
+    let stmts = &f.block.stmts;
+    if stmts.len() != 1 {
+        return false;
+    }
+    let expr = match &stmts[0] {
+        syn::Stmt::Expr(e, _) => e,
+        _ => return false,
+    };
+    let syn::Expr::Assign(a) = expr else {
+        return false;
+    };
+    if !matches_field_access(&a.left, field) {
+        return false;
+    }
+    // RHS should be some flavor of `default()` call. Accept either
+    // `<T as Default>::default()`, `T::default()`, or `Default::default()` —
+    // checking via path tail match.
+    let syn::Expr::Call(call) = a.right.as_ref() else {
+        return false;
+    };
+    let syn::Expr::Path(p) = call.func.as_ref() else {
+        return false;
+    };
+    // Final segment must be `default`.
+    p.path
+        .segments
+        .last()
+        .map(|s| s.ident == "default")
+        .unwrap_or(false)
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// SwapAll: `pub fn swap_<field>(&mut self, other: &mut Self) {
+//              std::mem::swap(&mut self.<field>, &mut other.<field>) }`
+// ─────────────────────────────────────────────────────────────────────
+
+pub struct SwapAllDetector;
+
+impl Detector for SwapAllDetector {
+    fn pattern(&self) -> MatchedPattern { MatchedPattern::SwapAll }
+    fn derive_crate(&self) -> &'static str { "pleme-swap-derive" }
+    fn derive_trait(&self) -> &'static str { "SwapAll" }
+    fn matches(&self, f: &ImplItemFn) -> bool {
+        let name = f.sig.ident.to_string();
+        let Some(field) = name.strip_prefix("swap_") else {
+            return false;
+        };
+        is_swap_shape(f, field)
+    }
+}
+
+fn is_swap_shape(f: &ImplItemFn, field: &str) -> bool {
+    // Receiver: &mut self.
+    if !matches!(
+        f.sig.inputs.first(),
+        Some(syn::FnArg::Receiver(r)) if r.reference.is_some() && r.mutability.is_some()
+    ) {
+        return false;
+    }
+    if f.sig.inputs.len() != 2 {
+        return false;
+    }
+    // Return: () — swap is void.
+    if !matches!(f.sig.output, syn::ReturnType::Default) {
+        return false;
+    }
+    let stmts = &f.block.stmts;
+    if stmts.len() != 1 {
+        return false;
+    }
+    let expr = match &stmts[0] {
+        syn::Stmt::Expr(e, _) => e,
+        _ => return false,
+    };
+    let syn::Expr::Call(call) = expr else {
+        return false;
+    };
+    let syn::Expr::Path(p) = call.func.as_ref() else {
+        return false;
+    };
+    if !path_ends_with(&p.path, &["mem", "swap"]) {
+        return false;
+    }
+    // First arg `&mut self.<field>`.
+    let Some(syn::Expr::Reference(r)) = call.args.first() else {
+        return false;
+    };
+    if r.mutability.is_none() {
+        return false;
+    }
+    matches_field_access(&r.expr, field)
+}
+
 /// Path tail-match helper. `std::mem::replace`, `core::mem::replace`,
 /// `::core::mem::replace`, and `mem::replace` all return true for
 /// `&["mem", "replace"]`. Lets the detectors accept the operator's
@@ -533,7 +664,7 @@ mod tests {
     #[test]
     fn registry_has_one_detector_per_pattern() {
         let dets = detectors();
-        assert_eq!(dets.len(), 8, "registry has the eight typed detectors");
+        assert_eq!(dets.len(), 10, "registry has the ten typed detectors");
         // No two detectors claim the same pattern.
         let mut seen: Vec<MatchedPattern> = vec![];
         for d in dets {
@@ -552,7 +683,7 @@ mod tests {
         let mut crates: Vec<&str> = dets.iter().map(|d| d.derive_crate()).collect();
         crates.sort();
         crates.dedup();
-        assert_eq!(crates.len(), 8, "every detector points at a distinct derive crate");
+        assert_eq!(crates.len(), 10, "every detector points at a distinct derive crate");
     }
 
     #[test]
@@ -614,6 +745,41 @@ mod tests {
             pub fn take_host(&mut self) -> String { self.host.clone() }
         };
         assert!(!TakeAllDetector.matches(&bad));
+    }
+
+    #[test]
+    fn reset_detector_accepts_default_call_shapes() {
+        for body in [
+            "{ self.host = <String as ::std::default::Default>::default(); }",
+            "{ self.host = String::default(); }",
+            "{ self.host = Default::default(); }",
+        ] {
+            let src = format!("pub fn reset_host(&mut self) {body}");
+            let f: ImplItemFn = syn::parse_str(&src).unwrap();
+            assert!(
+                ResetAllDetector.matches(&f),
+                "must match default-shape body: {body}"
+            );
+        }
+        let bad: ImplItemFn = parse_quote! {
+            pub fn reset_host(&mut self) { self.host = "".to_string(); }
+        };
+        assert!(!ResetAllDetector.matches(&bad), "string literal RHS → reject");
+    }
+
+    #[test]
+    fn swap_detector_matches_canonical_shape() {
+        let f: ImplItemFn = parse_quote! {
+            pub fn swap_host(&mut self, other: &mut Self) {
+                ::std::mem::swap(&mut self.host, &mut other.host);
+            }
+        };
+        assert!(SwapAllDetector.matches(&f));
+        // Not a swap — wrong receiver count.
+        let bad: ImplItemFn = parse_quote! {
+            pub fn swap_host(&mut self) { }
+        };
+        assert!(!SwapAllDetector.matches(&bad));
     }
 
     #[test]

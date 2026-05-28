@@ -95,6 +95,12 @@ pub enum MatchedPattern {
     /// `pub fn take_<field>(&mut self) -> <T> where <T>: Default { std::mem::take(&mut self.<field>) }`.
     /// Adopt: `pleme-take-derive` → `#[derive(TakeAll)]`.
     TakeAll,
+    /// `pub fn reset_<field>(&mut self) where <T>: Default { self.<field> = <T>::default() }`.
+    /// Adopt: `pleme-reset-derive` → `#[derive(ResetAll)]`.
+    ResetAll,
+    /// `pub fn swap_<field>(&mut self, other: &mut Self) { std::mem::swap(...) }`.
+    /// Adopt: `pleme-swap-derive` → `#[derive(SwapAll)]`.
+    SwapAll,
 }
 
 impl MatchedPattern {

@@ -150,7 +150,66 @@ fn render_by_hint(hint: VerifierHint, extern_name: &str, trait_name: &str) -> St
         VerifierHint::NewtypeDerefMut => render_deref_mut_newtype_smoke(extern_name, trait_name),
         VerifierHint::NewtypeDisplay => render_display_newtype_smoke(extern_name, trait_name),
         VerifierHint::NewtypeDefault => render_default_newtype_smoke(extern_name, trait_name),
+        VerifierHint::PerFieldReset => render_reset_smoke(extern_name, trait_name),
+        VerifierHint::PerFieldSwap => render_swap_smoke(extern_name, trait_name),
     }
+}
+
+/// `pub fn reset_<field>(&mut self) where <T>: Default` smoke.
+fn render_reset_smoke(extern_name: &str, trait_name: &str) -> String {
+    format!(
+        r#"    use {extern_name}::{trait_name};
+
+    #[derive(Default, {trait_name})]
+    pub struct Sample {{
+        pub host: String,
+        pub port: u16,
+    }}
+
+    #[cfg(test)]
+    mod tests {{
+        use super::*;
+        #[test]
+        fn reset_field_returns_field_to_default() {{
+            let mut s = Sample {{ host: "abc".into(), port: 443 }};
+            s.reset_host();
+            assert_eq!(s.host, "");
+            assert_eq!(s.port, 443, "untouched fields stay");
+            s.reset_port();
+            assert_eq!(s.port, 0);
+        }}
+    }}
+"#
+    )
+}
+
+/// `pub fn swap_<field>(&mut self, other: &mut Self)` smoke.
+fn render_swap_smoke(extern_name: &str, trait_name: &str) -> String {
+    format!(
+        r#"    use {extern_name}::{trait_name};
+
+    #[derive({trait_name})]
+    pub struct Sample {{
+        pub host: String,
+        pub port: u16,
+    }}
+
+    #[cfg(test)]
+    mod tests {{
+        use super::*;
+        #[test]
+        fn swap_field_exchanges_between_instances() {{
+            let mut a = Sample {{ host: "a".into(), port: 1 }};
+            let mut b = Sample {{ host: "b".into(), port: 2 }};
+            a.swap_host(&mut b);
+            assert_eq!(a.host, "b");
+            assert_eq!(b.host, "a");
+            assert_eq!(a.port, 1, "untouched fields stay");
+            assert_eq!(b.port, 2);
+        }}
+    }}
+"#
+    )
 }
 
 /// `pub fn into_<field>(self) -> <T>` consuming-getter smoke.

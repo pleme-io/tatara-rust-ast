@@ -278,4 +278,30 @@
         :per-variant-fragment "Self::#variant_name => #variant_str"
         :fold-template "impl #self_name { pub fn as_str(&self) -> &'static str { match self { #fold } } }"
       ))
+    (
+      :crate-name "pleme-reset-derive"
+      :description "Per-field reset to default: pub fn reset_<field>(&mut self) where <T>: Default { self.<field> = <T>::default(); }. Useful for re-initializing struct fields without rebuilding the whole struct."
+      :since "0.1.0"
+      :owner "pleme-io"
+      :verifier-hint per-field-reset
+      :kind per-field
+      :spec (
+        :trait-name "ResetAll"
+        :target named-struct
+        :per-field-template "pub fn #method_ident(&mut self) where #field_ty: ::std::default::Default { self.#field_name = <#field_ty as ::std::default::Default>::default(); }"
+        :method-name-template "reset_{}"
+      ))
+    (
+      :crate-name "pleme-swap-derive"
+      :description "Per-field swap with another instance: pub fn swap_<field>(&mut self, other: &mut Self) { std::mem::swap(&mut self.<field>, &mut other.<field>); }. Useful for parallel data structures, state machines, double-buffering."
+      :since "0.1.0"
+      :owner "pleme-io"
+      :verifier-hint per-field-swap
+      :kind per-field
+      :spec (
+        :trait-name "SwapAll"
+        :target named-struct
+        :per-field-template "pub fn #method_ident(&mut self, other: &mut Self) { ::std::mem::swap(&mut self.#field_name, &mut other.#field_name); }"
+        :method-name-template "swap_{}"
+      ))
   ))

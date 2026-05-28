@@ -378,6 +378,8 @@ fn parse_verifier_hint(s: &str) -> Result<VerifierHint, ParseError> {
         "newtype-deref-mut" => NewtypeDerefMut,
         "newtype-display" => NewtypeDisplay,
         "newtype-default" => NewtypeDefault,
+        "per-field-reset" => PerFieldReset,
+        "per-field-swap" => PerFieldSwap,
         other => return Err(ParseError::UnknownHint(other.to_string())),
     })
 }
@@ -755,6 +757,8 @@ fn hint_to_sym(h: VerifierHint) -> &'static str {
         NewtypeDerefMut => "newtype-deref-mut",
         NewtypeDisplay => "newtype-display",
         NewtypeDefault => "newtype-default",
+        PerFieldReset => "per-field-reset",
+        PerFieldSwap => "per-field-swap",
     }
 }
 

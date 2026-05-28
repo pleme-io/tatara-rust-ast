@@ -118,6 +118,10 @@ pub enum VerifierHint {
     /// Enum-fold `pub fn as_str(&self) -> &'static str` returning the
     /// bare variant name. Unit-variant enums only.
     EnumFoldVariantStr,
+    /// `pub fn reset_<field>(&mut self) where <T>: Default { … }` per field.
+    PerFieldReset,
+    /// `pub fn swap_<field>(&mut self, other: &mut Self) { mem::swap(…) }` per field.
+    PerFieldSwap,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
