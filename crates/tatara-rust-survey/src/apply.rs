@@ -30,7 +30,7 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::{Attribute, File, ImplItem, Item, parse_quote};
 
-use crate::{MatchedPattern, RefactorCandidate, classify_fn, type_to_string};
+use crate::{MatchedPattern, RefactorCandidate, classify_fn, type_base_ident};
 
 #[derive(Debug, thiserror::Error)]
 pub enum ApplyError {
@@ -79,9 +79,11 @@ pub fn apply_to_source(src: &str, cand: &RefactorCandidate) -> Result<String, Ap
                 true
             }
             // Strip matching methods from inherent impls on the target.
+            // Use base-ident comparison so `impl<T> Foo<T>` matches
+            // candidates whose target_type is `"Foo"`.
             Item::Impl(imp)
                 if imp.trait_.is_none()
-                    && type_to_string(&imp.self_ty) == cand.target_type =>
+                    && type_base_ident(&imp.self_ty).as_deref() == Some(cand.target_type.as_str()) =>
             {
                 let before = imp.items.len();
                 imp.items.retain(|it| match it {

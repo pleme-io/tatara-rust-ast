@@ -37,7 +37,10 @@ pub mod pipeline;
 pub use apply::{apply_to_source, ApplyError};
 pub use cargo_deps::{inject_deps, CargoDepsError, DepSource, InjectOutcome};
 pub use detector::{detectors, Detector};
-pub use fleet::{survey_fleet, CrateSurveyEntry, FleetSurveyReport};
+pub use fleet::{
+    survey_fleet, survey_fleet_apply, CrateSurveyEntry, FleetApplyEntry, FleetApplyOpts,
+    FleetApplyReport, FleetSurveyReport,
+};
 pub use pipeline::{
     apply_all_to_source, survey_apply_validate, FileOutcome, PipelineError, PipelineOpts,
     PipelineOutcome,
@@ -193,7 +196,14 @@ impl<'ast> Visit<'ast> for SurveyVisitor {
             return;
         }
 
-        let target_type = type_to_string(&i.self_ty);
+        // Extract the BASE identifier — for `impl<T> Foo<T> { ... }`
+        // we want `target_type == "Foo"` so it matches `Item::Struct`
+        // whose `ident` is the unadorned name. `type_to_string` would
+        // produce `"Foo < T >"` here (token spaces) and break the
+        // downstream apply lookup.
+        let Some(target_type) = type_base_ident(&i.self_ty) else {
+            return; // weird shape (Trait object, tuple, etc.) — skip
+        };
         // proc-macro2's Span::start() is gated behind the "span-locations"
         // feature; under stable rustc without that feature we just
         // report line 1. Operators get the file path either way.
@@ -256,6 +266,19 @@ pub(crate) fn type_to_string(t: &syn::Type) -> String {
     let mut buf = proc_macro2::TokenStream::new();
     t.to_tokens(&mut buf);
     buf.to_string()
+}
+
+/// Return the FINAL path segment's identifier as a String — strips
+/// generic arguments + module path. For `Foo<T>` returns `"Foo"`;
+/// for `a::b::Foo<T, U>` returns `"Foo"`; for `&[u8]`, tuples, trait
+/// objects, etc., returns `None`. This is what `Item::Struct.ident`
+/// compares against — the bare struct name, not the token-rendered
+/// generic spelling.
+pub(crate) fn type_base_ident(t: &syn::Type) -> Option<String> {
+    let syn::Type::Path(tp) = t else {
+        return None;
+    };
+    tp.path.segments.last().map(|seg| seg.ident.to_string())
 }
 
 #[cfg(test)]
@@ -360,6 +383,40 @@ impl std::fmt::Display for Foo {
         );
         let cands = survey_file(&path).unwrap();
         assert!(cands.is_empty(), "trait impls aren't farm-derive targets");
+    }
+
+    #[test]
+    fn generic_impl_target_type_strips_to_base_ident() {
+        // Regression for real-fleet drift surfaced 2026-05-28:
+        // `impl<T> Attested<T> { ... }` previously produced
+        // target_type == "Attested < T >" (TokenStream::to_string
+        // spaces around generics), breaking the downstream apply
+        // match against Item::Struct.ident which is the bare name.
+        let path = tmp_file(
+            "generic-target",
+            r#"
+pub struct Attested<T> { pub inner: T, pub sig: String }
+
+impl<T> Attested<T> {
+    pub fn inner(&self) -> &T { &self.inner }
+    pub fn sig(&self) -> &String { &self.sig }
+}
+"#,
+        );
+        let cands = survey_file(&path).unwrap();
+        assert!(!cands.is_empty(), "must surface candidates on generic struct");
+        for c in &cands {
+            assert_eq!(
+                c.target_type, "Attested",
+                "target_type must strip generics + module path"
+            );
+        }
+        // Apply must succeed on the same source — proves the
+        // end-to-end roundtrip works for generic types.
+        let src = std::fs::read_to_string(&path).unwrap();
+        let out = apply_to_source(&src, &cands[0]).unwrap();
+        assert!(out.contains("#[derive(GetterAll)]"));
+        assert!(out.contains("pub struct Attested<T>"));
     }
 
     #[test]

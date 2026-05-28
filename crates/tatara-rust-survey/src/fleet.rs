@@ -22,7 +22,10 @@ use serde::Serialize;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use crate::{survey_tree, MatchedPattern, RefactorCandidate, SurveyError};
+use crate::{
+    pipeline::{survey_apply_validate, PipelineOpts, PipelineOutcome},
+    survey_tree, MatchedPattern, PipelineError, RefactorCandidate, SurveyError,
+};
 
 /// One crate's slice of the fleet survey.
 #[derive(Clone, Debug, Serialize)]
@@ -152,6 +155,154 @@ fn pattern_label(p: MatchedPattern) -> String {
         MatchedPattern::IsVariant => "IsVariant",
     }
     .to_string()
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Fleet-wide apply — compose survey_fleet (discovery) + W12 atomic
+// per-crate pipeline (apply + inject Cargo.toml deps + gate + rollback)
+// ─────────────────────────────────────────────────────────────────────
+
+/// Operator-facing options for [`survey_fleet_apply`].
+///
+/// Composes [`PipelineOpts`] (the per-crate config — applied
+/// identically to every fleet entry) with fleet-specific concerns:
+/// a candidate-count threshold + a safety brake that stops at the
+/// first per-crate rollback.
+#[derive(Clone, Debug)]
+pub struct FleetApplyOpts {
+    /// Skip any crate with fewer than this many candidates. Default
+    /// 1 (touch every crate with at least one finding); operators
+    /// running --write should set this higher (e.g. 5–10) to limit
+    /// blast radius to the top-leverage targets.
+    pub threshold: usize,
+    /// Per-crate pipeline opts — applied to every fleet entry.
+    /// Defaults to dry-run via [`PipelineOpts::default`].
+    pub pipeline_opts: PipelineOpts,
+    /// Safety brake: if any crate's gate goes red and rolls back,
+    /// stop the fleet sweep there (do not attempt subsequent
+    /// crates). Default `true` — assume a rollback signals a
+    /// substrate bug worth pausing to investigate.
+    pub stop_on_first_rollback: bool,
+}
+
+impl Default for FleetApplyOpts {
+    fn default() -> Self {
+        Self {
+            threshold: 1,
+            pipeline_opts: PipelineOpts::default(),
+            stop_on_first_rollback: true,
+        }
+    }
+}
+
+/// One crate's outcome in the fleet apply sweep.
+#[derive(Debug, Serialize)]
+pub struct FleetApplyEntry {
+    pub crate_path: PathBuf,
+    pub outcome: PipelineOutcome,
+}
+
+impl FleetApplyEntry {
+    pub fn is_clean_success(&self) -> bool {
+        self.outcome.is_clean_success()
+    }
+    pub fn rolled_back(&self) -> bool {
+        self.outcome.rolled_back
+    }
+}
+
+/// Aggregate result of [`survey_fleet_apply`].
+#[derive(Debug, Serialize)]
+pub struct FleetApplyReport {
+    pub root: PathBuf,
+    pub threshold: usize,
+    pub entries: Vec<FleetApplyEntry>,
+    pub crates_considered: usize,
+    pub crates_attempted: usize,
+    pub total_candidates_applied: usize,
+    pub total_rolled_back: usize,
+    /// `true` iff the sweep aborted at the first per-crate rollback
+    /// (only possible when `opts.stop_on_first_rollback`).
+    pub stopped_early: bool,
+}
+
+impl FleetApplyReport {
+    /// Crates whose per-crate pipeline finished green (or dry-ran
+    /// cleanly with no gate).
+    pub fn green(&self) -> Vec<&FleetApplyEntry> {
+        self.entries.iter().filter(|e| e.is_clean_success()).collect()
+    }
+    /// Crates whose gate went red and were rolled back. The
+    /// operator's tree is at pre-pipeline state for every entry
+    /// here — they're typed leads to investigate, not regressions.
+    pub fn red(&self) -> Vec<&FleetApplyEntry> {
+        self.entries.iter().filter(|e| e.rolled_back()).collect()
+    }
+}
+
+/// Fleet-wide adoption sweep. For every Cargo crate under `root`
+/// that has ≥ `opts.threshold` candidates, run
+/// [`survey_apply_validate`] with `opts.pipeline_opts`.
+///
+/// **Atomicity is per-crate**: every crate's transforms (`.rs` +
+/// `Cargo.toml`) land atomically with rollback on red gate. A
+/// fleet-wide red gate on one crate does NOT corrupt other crates'
+/// state. Partial fleet success is the safe default — operator
+/// commits the green crates, investigates the red ones.
+///
+/// Per the W12 contract, each per-crate failure already left that
+/// crate's working tree exactly as it was. The fleet sweep's only
+/// extra safety knob is `stop_on_first_rollback` — if true, the
+/// sweep aborts at the first red to surface the bug for inspection
+/// before continuing to other crates.
+pub fn survey_fleet_apply(
+    root: &Path,
+    opts: &FleetApplyOpts,
+) -> Result<FleetApplyReport, PipelineError> {
+    // Step 1: discover — survey_fleet already produces the
+    // sorted-by-leverage leaderboard.
+    let report = survey_fleet(root)?;
+    let crates_considered = report.crates_with_candidates;
+    let above: Vec<&CrateSurveyEntry> = report
+        .entries
+        .iter()
+        .filter(|e| e.candidate_count >= opts.threshold)
+        .collect();
+
+    let mut entries: Vec<FleetApplyEntry> = vec![];
+    let mut total_applied = 0usize;
+    let mut total_rolled_back = 0usize;
+    let mut stopped_early = false;
+
+    // Step 2: apply per-crate. Each call composes the full W12
+    // atomic pipeline (apply + inject deps + gate + rollback).
+    for ce in &above {
+        let outcome = survey_apply_validate(&ce.crate_path, &opts.pipeline_opts)?;
+        total_applied += outcome.total_applied;
+        let rolled = outcome.rolled_back;
+        if rolled {
+            total_rolled_back += 1;
+        }
+        entries.push(FleetApplyEntry {
+            crate_path: ce.crate_path.clone(),
+            outcome,
+        });
+        if rolled && opts.stop_on_first_rollback {
+            stopped_early = true;
+            break;
+        }
+    }
+
+    Ok(FleetApplyReport {
+        root: root.to_path_buf(),
+        threshold: opts.threshold,
+        crates_considered,
+        crates_attempted: entries.len(),
+        total_candidates_applied: total_applied,
+        total_rolled_back,
+        stopped_early,
+        entries,
+    })
 }
 
 #[cfg(test)]
@@ -298,5 +449,59 @@ path = "src/lib.rs"
         std::fs::write(root.join("target/Cargo.toml"), "[package]\nname=\"y\"").unwrap();
         let report = survey_fleet(&root).unwrap();
         assert_eq!(report.crates_scanned, 0, ".hidden and target must be skipped");
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    // fleet-apply tests
+    // ─────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn fleet_apply_dry_run_aggregates_across_crates() {
+        let root = tmp_org(
+            "apply-dry",
+            &[("alpha", GETTER_BODY), ("beta", ISVARIANT_BODY)],
+        );
+        let opts = FleetApplyOpts::default(); // dry-run, threshold=1
+        let report = survey_fleet_apply(&root, &opts).unwrap();
+        assert_eq!(report.crates_considered, 2);
+        assert_eq!(report.crates_attempted, 2);
+        assert!(report.total_candidates_applied >= 2);
+        assert_eq!(report.total_rolled_back, 0, "dry run has no gate, no rollback");
+        assert!(!report.stopped_early);
+        // dry-run leaves disk byte-identical.
+        let alpha_lib = std::fs::read_to_string(root.join("alpha/src/lib.rs")).unwrap();
+        assert_eq!(alpha_lib, GETTER_BODY);
+    }
+
+    #[test]
+    fn threshold_filters_low_candidate_crates_out() {
+        let root = tmp_org(
+            "apply-threshold",
+            &[("only-one", GETTER_BODY), ("also-one", ISVARIANT_BODY)],
+        );
+        let opts = FleetApplyOpts {
+            threshold: 5, // both crates have 1 → both filtered out
+            ..FleetApplyOpts::default()
+        };
+        let report = survey_fleet_apply(&root, &opts).unwrap();
+        assert_eq!(report.crates_considered, 2);
+        assert_eq!(report.crates_attempted, 0, "threshold=5 filters both");
+        assert!(report.entries.is_empty());
+    }
+
+    #[test]
+    fn green_red_partitioning_matches_entry_states() {
+        let report = FleetApplyReport {
+            root: PathBuf::from("/tmp"),
+            threshold: 1,
+            entries: vec![],
+            crates_considered: 0,
+            crates_attempted: 0,
+            total_candidates_applied: 0,
+            total_rolled_back: 0,
+            stopped_early: false,
+        };
+        assert_eq!(report.green().len(), 0);
+        assert_eq!(report.red().len(), 0);
     }
 }

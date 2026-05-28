@@ -41,7 +41,8 @@ use tatara_rust_publish::{
 };
 use tatara_rust_tlisp::{parse_macrocatalog, render_macrocatalog};
 use tatara_rust_survey::{
-    apply_to_source, survey_apply_validate, survey_file, survey_fleet, survey_tree, PipelineOpts,
+    apply_to_source, survey_apply_validate, survey_file, survey_fleet, survey_fleet_apply,
+    survey_tree, FleetApplyOpts, PipelineOpts,
 };
 
 #[derive(Serialize, Deserialize)]
@@ -85,7 +86,8 @@ fn usage() -> ExitCode {
         tatara-rust-forge survey <crate-src-path> [--json]              (scan a Rust crate for derive-adoption candidates)\n  \
         tatara-rust-forge survey-apply <file.rs> [--write]              (apply the first candidate to a file; --write commits to disk)\n  \
         tatara-rust-forge survey-apply-all <crate-root> [--write] [--no-validate] [--skip-clippy] [--no-inject-deps] (whole-crate survey → apply → inject Cargo.toml deps → validate; rolls back on red gate)\n  \
-        tatara-rust-forge survey-fleet <org-root> [--threshold N] [--json] (aggregate every crate under org-root; leaderboard sorted by candidate count)"
+        tatara-rust-forge survey-fleet <org-root> [--threshold N] [--json] (aggregate every crate under org-root; leaderboard sorted by candidate count)\n  \
+        tatara-rust-forge survey-fleet-apply <org-root> [--threshold N] [--write] [--no-validate] [--skip-clippy] [--no-inject-deps] [--no-stop-on-rollback] (bulk fleet adoption; per-crate atomic apply+gate+rollback)"
     );
     ExitCode::from(2)
 }
@@ -111,6 +113,7 @@ fn main() -> ExitCode {
         "survey-apply" => cmd_survey_apply(rest),
         "survey-apply-all" => cmd_survey_apply_all(rest),
         "survey-fleet" => cmd_survey_fleet(rest),
+        "survey-fleet-apply" => cmd_survey_fleet_apply(rest),
         "--help" | "-h" => {
             usage();
             return ExitCode::SUCCESS;
@@ -1005,3 +1008,121 @@ fn cmd_survey_fleet(args: &[String]) -> Result<String, String> {
         report.total_candidates,
     ))
 }
+
+// ─────────────────────────────────────────────────────────────────────
+// survey-fleet-apply — bulk fleet adoption with per-crate atomicity
+// ─────────────────────────────────────────────────────────────────────
+
+fn cmd_survey_fleet_apply(args: &[String]) -> Result<String, String> {
+    if args.is_empty() {
+        return Err(
+            "survey-fleet-apply: needs <org-root> [--threshold N] [--write] [--no-validate] [--skip-clippy] [--no-inject-deps] [--no-stop-on-rollback]"
+                .into(),
+        );
+    }
+    let root = PathBuf::from(&args[0]);
+    let write = args.iter().any(|a| a == "--write");
+    let no_validate = args.iter().any(|a| a == "--no-validate");
+    let skip_clippy = args.iter().any(|a| a == "--skip-clippy");
+    let no_inject_deps = args.iter().any(|a| a == "--no-inject-deps");
+    let no_stop = args.iter().any(|a| a == "--no-stop-on-rollback");
+    let threshold: usize = {
+        let mut t = 1usize;
+        let mut it = args.iter();
+        while let Some(a) = it.next() {
+            if a == "--threshold" {
+                if let Some(n) = it.next() {
+                    t = n.parse().map_err(|e| format!("--threshold: {e}"))?;
+                }
+            }
+        }
+        t
+    };
+
+    let mut gate_cfg = GateConfig::default();
+    if skip_clippy {
+        gate_cfg.gates.retain(|g| !matches!(g, Gate::Clippy));
+    }
+
+    let pipeline_opts = PipelineOpts {
+        write,
+        validate: !no_validate,
+        gate_cfg,
+        inject_cargo_deps: !no_inject_deps,
+        dep_source: tatara_rust_survey::DepSource::default(),
+    };
+    let opts = FleetApplyOpts {
+        threshold,
+        pipeline_opts,
+        stop_on_first_rollback: !no_stop,
+    };
+
+    let report = survey_fleet_apply(&root, &opts).map_err(|e| format!("fleet-apply: {e}"))?;
+
+    let mode_label = match (write, no_validate) {
+        (false, _) => "DRY-RUN",
+        (true, true) => "WRITE (no-validate)",
+        (true, false) => "WRITE + VALIDATE",
+    };
+    println!("=== tatara-rust-forge survey-fleet-apply ===");
+    println!("Root: {}", report.root.display());
+    println!(
+        "Mode: {mode_label}    Threshold: {}    Per-crate atomic: yes",
+        report.threshold,
+    );
+    println!(
+        "Crates: {} considered, {} attempted",
+        report.crates_considered, report.crates_attempted,
+    );
+    println!(
+        "Adoption: {} candidates applied across the fleet",
+        report.total_candidates_applied,
+    );
+    let greens = report.green().len();
+    let reds = report.red().len();
+    println!("Outcomes: {greens} green    {reds} red (rolled back)");
+    if report.stopped_early {
+        println!("⚠ STOPPED EARLY at first red — re-run with --no-stop-on-rollback to push past");
+    }
+
+    if !report.entries.is_empty() {
+        println!("─── Per-crate report ───");
+        println!(
+            "{:>4}  {:>6}  {:<60}  outcome",
+            "appl", "files", "crate"
+        );
+        for e in &report.entries {
+            let n_files = e.outcome.files.iter().filter(|f| f.candidates_applied > 0).count();
+            let outcome_label = if e.outcome.rolled_back {
+                "⚠ rolled back".to_string()
+            } else if e.outcome.is_clean_success() {
+                if write {
+                    "✓ landed".to_string()
+                } else {
+                    "✓ dry-ran".to_string()
+                }
+            } else {
+                "? skipped".to_string()
+            };
+            println!(
+                "{:>4}  {:>6}  {:<60}  {}",
+                e.outcome.total_applied,
+                n_files,
+                e.crate_path
+                    .file_name()
+                    .map(|n| n.to_string_lossy().to_string())
+                    .unwrap_or_else(|| e.crate_path.display().to_string()),
+                outcome_label,
+            );
+        }
+    }
+
+    Ok(format!(
+        "{}/{} crates green; {} candidates applied{}",
+        greens,
+        report.crates_attempted,
+        report.total_candidates_applied,
+        if reds > 0 { format!(" ({reds} rolled back)") } else { String::new() },
+    ))
+}
+
