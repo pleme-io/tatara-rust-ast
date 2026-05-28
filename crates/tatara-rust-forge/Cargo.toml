@@ -26,6 +26,7 @@ tatara-rust-repo        .workspace = true
 tatara-rust-gate        .workspace = true
 tatara-rust-verify      .workspace = true
 tatara-rust-publish     .workspace = true
+tatara-rust-tlisp       .workspace = true
 serde                   .workspace = true
 serde_json              .workspace = true
 thiserror               .workspace = true

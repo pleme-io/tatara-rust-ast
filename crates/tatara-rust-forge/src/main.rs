@@ -39,6 +39,7 @@ use tatara_rust_verify::build_consumer_verify;
 use tatara_rust_publish::{
     PublishConfig, PublishOutcome, RepoPublishSpec, RepoVisibility, publish_all,
 };
+use tatara_rust_tlisp::{parse_macrocatalog, render_macrocatalog};
 
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
@@ -75,7 +76,9 @@ fn usage() -> ExitCode {
         tatara-rust-forge catalog-emit-verify <catalog.json> --out <dir>\n  \
         tatara-rust-forge catalog-gate-all <dir> [--skip-clippy]\n  \
         tatara-rust-forge catalog-publish-all <catalog.json> --dir <dir> --org <github-org> [--private] [--continue-on-error]\n  \
-        tatara-rust-forge catalog-instantiate <catalog.json> --out <dir> [--repo-url-prefix <url>] [--skip-clippy] [--no-gate] [--publish --org <org>]"
+        tatara-rust-forge catalog-instantiate <catalog.json> --out <dir> [--repo-url-prefix <url>] [--skip-clippy] [--no-gate] [--publish --org <org>]\n  \
+        tatara-rust-forge catalog-from-lisp <catalog.lisp> <out.json>   (parse defmacrocatalog → JSON)\n  \
+        tatara-rust-forge catalog-to-lisp <catalog.json> <out.lisp>     (render JSON → defmacrocatalog)"
     );
     ExitCode::from(2)
 }
@@ -95,6 +98,8 @@ fn main() -> ExitCode {
         "catalog-gate-all" => cmd_catalog_gate_all(rest),
         "catalog-publish-all" => cmd_catalog_publish_all(rest),
         "catalog-instantiate" => cmd_catalog_instantiate(rest),
+        "catalog-from-lisp" => cmd_catalog_from_lisp(rest),
+        "catalog-to-lisp" => cmd_catalog_to_lisp(rest),
         "--help" | "-h" => {
             usage();
             return ExitCode::SUCCESS;
@@ -209,10 +214,7 @@ fn cmd_catalog_emit_repos(args: &[String]) -> Result<String, String> {
     }
     let out_dir = out_dir.ok_or("--out is required")?;
 
-    let text = std::fs::read_to_string(catalog_path)
-        .map_err(|e| format!("read {}: {e}", catalog_path.display()))?;
-    let catalog: MacroCatalogSpec = serde_json::from_str(&text)
-        .map_err(|e| format!("parse {}: {e}", catalog_path.display()))?;
+    let catalog = load_catalog(catalog_path)?;
     let repos = catalog
         .compile_to_repos(&repo_url_prefix)
         .map_err(|e| format!("compile repos: {e}"))?;
@@ -256,10 +258,7 @@ fn cmd_catalog_emit_verify(args: &[String]) -> Result<String, String> {
     }
     let out_dir = out_dir.ok_or("--out is required")?;
 
-    let text = std::fs::read_to_string(catalog_path)
-        .map_err(|e| format!("read {}: {e}", catalog_path.display()))?;
-    let catalog: MacroCatalogSpec = serde_json::from_str(&text)
-        .map_err(|e| format!("parse {}: {e}", catalog_path.display()))?;
+    let catalog = load_catalog(catalog_path)?;
     let scaffold = build_consumer_verify(&catalog, |c| format!("../{c}"));
     let verify_root = out_dir.join("consumer-verify");
     scaffold
@@ -376,10 +375,7 @@ fn cmd_catalog_publish_all(args: &[String]) -> Result<String, String> {
     let dir = dir.ok_or("--dir is required")?;
     let org = org.ok_or("--org is required")?;
 
-    let text = std::fs::read_to_string(catalog_path)
-        .map_err(|e| format!("read {}: {e}", catalog_path.display()))?;
-    let catalog: MacroCatalogSpec = serde_json::from_str(&text)
-        .map_err(|e| format!("parse {}: {e}", catalog_path.display()))?;
+    let catalog = load_catalog(catalog_path)?;
 
     let mut specs: Vec<RepoPublishSpec> = vec![];
     for entry in &catalog.entries {
@@ -479,10 +475,7 @@ fn cmd_catalog_instantiate(args: &[String]) -> Result<String, String> {
     }
     let out_dir = out_dir.ok_or("--out is required")?;
 
-    let text = std::fs::read_to_string(catalog_path)
-        .map_err(|e| format!("read {}: {e}", catalog_path.display()))?;
-    let catalog: MacroCatalogSpec = serde_json::from_str(&text)
-        .map_err(|e| format!("parse {}: {e}", catalog_path.display()))?;
+    let catalog = load_catalog(catalog_path)?;
 
     // Phase 1 — repos.
     let repos = catalog
@@ -636,5 +629,70 @@ fn cmd_catalog_instantiate(args: &[String]) -> Result<String, String> {
         } else {
             "skipped"
         }
+    ))
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// load_catalog — auto-detect JSON vs tlisp by file extension
+// ─────────────────────────────────────────────────────────────────────
+
+/// Load a `MacroCatalogSpec` from either JSON or tlisp form. The
+/// extension drives the dispatch: `.lisp` / `.tlisp` → tlisp parser;
+/// anything else → serde_json. Lets every subcommand that takes a
+/// catalog accept both formats transparently.
+fn load_catalog(path: &Path) -> Result<MacroCatalogSpec, String> {
+    let text = std::fs::read_to_string(path)
+        .map_err(|e| format!("read {}: {e}", path.display()))?;
+    let ext = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(str::to_ascii_lowercase)
+        .unwrap_or_default();
+    match ext.as_str() {
+        "lisp" | "tlisp" => parse_macrocatalog(&text)
+            .map_err(|e| format!("parse {} (tlisp): {e}", path.display())),
+        _ => serde_json::from_str(&text)
+            .map_err(|e| format!("parse {} (json): {e}", path.display())),
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// catalog-from-lisp / catalog-to-lisp — tlisp authoring round-trip
+// ─────────────────────────────────────────────────────────────────────
+
+fn cmd_catalog_from_lisp(args: &[String]) -> Result<String, String> {
+    let [lisp_path, json_out] = args else {
+        return Err("catalog-from-lisp: needs <catalog.lisp> <out.json>".into());
+    };
+    let src = std::fs::read_to_string(lisp_path)
+        .map_err(|e| format!("read {lisp_path}: {e}"))?;
+    let catalog = parse_macrocatalog(&src)
+        .map_err(|e| format!("parse {lisp_path}: {e}"))?;
+    let json = serde_json::to_string_pretty(&catalog)
+        .map_err(|e| format!("serialize: {e}"))?;
+    std::fs::write(json_out, &json)
+        .map_err(|e| format!("write {json_out}: {e}"))?;
+    Ok(format!(
+        "wrote {} ({} entries) — (defmacrocatalog) → JSON",
+        json_out,
+        catalog.entries.len()
+    ))
+}
+
+fn cmd_catalog_to_lisp(args: &[String]) -> Result<String, String> {
+    let [json_path, lisp_out] = args else {
+        return Err("catalog-to-lisp: needs <catalog.json> <out.lisp>".into());
+    };
+    let src = std::fs::read_to_string(json_path)
+        .map_err(|e| format!("read {json_path}: {e}"))?;
+    let catalog: MacroCatalogSpec = serde_json::from_str(&src)
+        .map_err(|e| format!("parse {json_path}: {e}"))?;
+    let lisp = render_macrocatalog(&catalog);
+    std::fs::write(lisp_out, &lisp)
+        .map_err(|e| format!("write {lisp_out}: {e}"))?;
+    Ok(format!(
+        "wrote {} ({} entries) — JSON → (defmacrocatalog)",
+        lisp_out,
+        catalog.entries.len()
     ))
 }

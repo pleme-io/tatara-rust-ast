@@ -20,6 +20,9 @@ use tatara_rust_proc_attr::{AttrTransform, ProcAttrSpec};
 use tatara_rust_proc_fn::{FnTransform, ProcFnSpec};
 use tatara_rust_suite::{MacroMemberSpec, MacroSuiteSpec};
 
+pub mod catalog;
+pub use catalog::{ParseError, SExpr, parse_macrocatalog, parse_sexprs, render_macrocatalog};
+
 /// Render any Spec to its canonical tlisp `(def<kind> …)` form. The
 /// returned text is what the operator authors today in a `.tlisp` file.
 pub trait RenderTlisp {
