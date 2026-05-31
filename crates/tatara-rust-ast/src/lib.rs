@@ -19,12 +19,14 @@ use quote::quote;
 use serde::{Deserialize, Serialize};
 
 pub mod cargo;
+pub mod cargo_manifest;
 pub mod error;
 pub mod from_syn;
 pub mod scaffold;
 pub mod traits;
 
 pub use cargo::render_proc_macro_cargo_toml;
+pub use cargo_manifest::{CargoManifest, Dep, DetailedDep, Lib, Package};
 pub use error::AstError;
 pub use scaffold::{CrateScaffold, FileEntry};
 pub use traits::{CompileToCrate, FromSyn, ToRustTokens};
