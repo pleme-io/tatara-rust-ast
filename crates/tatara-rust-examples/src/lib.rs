@@ -8,7 +8,17 @@
 //! End-to-end coverage in `tatara-rust-test/tests/per_field_end_to_end.rs`.
 
 use tatara_rust_ast::Ident;
-use tatara_rust_derive::{PerFieldDeriveSpec, PerFieldTarget};
+use tatara_rust_derive::{PerFieldDeriveSpec, PerFieldTarget, VerificationMatrixSpec};
+
+/// `pleme-verification-matrix` — the farm's first test-generation
+/// primitive. Emits the dependency-free `verification_matrix!` +
+/// `matrix_covers_all!` declarative-macro pair (CLOSED-LOOP
+/// MASS-SYNTHESIS rule 1). Exercised end-to-end in
+/// `tests/verification_matrix_e2e.rs`.
+#[must_use]
+pub fn verification_matrix_spec() -> VerificationMatrixSpec {
+    VerificationMatrixSpec::canonical()
+}
 
 /// `#[derive(GetterAll)]` — `pub fn <field>(&self) -> &<Type>` for every named field.
 /// Inherent impl. Method name = field name.

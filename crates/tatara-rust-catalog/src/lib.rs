@@ -20,7 +20,7 @@ use tatara_rust_ast::{AstError, CompileToCrate, CrateScaffold};
 use tatara_rust_composite::CompositeDeriveSpec;
 use tatara_rust_derive::{
     EnumFoldDeriveSpec, KindRoundTripSpec, NewtypeDeriveSpec, PerFieldDeriveSpec,
-    PerVariantDeriveSpec, ProcDeriveSpec,
+    PerVariantDeriveSpec, ProcDeriveSpec, VerificationMatrixSpec,
 };
 use tatara_rust_macro_rules::MacroRulesSpec;
 use tatara_rust_proc_attr::ProcAttrSpec;
@@ -137,6 +137,7 @@ pub enum CatalogSpec {
     MacroRules { spec: MacroRulesSpec },
     Composite { spec: CompositeDeriveSpec },
     KindRoundTrip { spec: KindRoundTripSpec },
+    VerificationMatrix { spec: VerificationMatrixSpec },
 }
 
 /// Self-describing capability surface every catalog-eligible Spec
@@ -200,6 +201,10 @@ impl SpecKind for KindRoundTripSpec {
     fn kind_label(&self) -> &'static str { "kind-round-trip" }
     fn trait_name_for_verifier(&self) -> &str { &self.trait_name.0 }
 }
+impl SpecKind for VerificationMatrixSpec {
+    fn kind_label(&self) -> &'static str { "verification-matrix" }
+    fn trait_name_for_verifier(&self) -> &str { self.primary_name() }
+}
 
 impl CatalogSpec {
     /// **Single dispatch surface** — returns the inner Spec as
@@ -217,6 +222,7 @@ impl CatalogSpec {
             Self::MacroRules { spec } => spec,
             Self::Composite { spec } => spec,
             Self::KindRoundTrip { spec } => spec,
+            Self::VerificationMatrix { spec } => spec,
         }
     }
 

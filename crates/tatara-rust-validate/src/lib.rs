@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 use tatara_rust_composite::{CompositeDeriveSpec, CompositeMember};
 use tatara_rust_derive::{
     EnumFoldDeriveSpec, KindRoundTripSpec, NewtypeDeriveSpec, PerFieldDeriveSpec,
-    PerVariantDeriveSpec, ProcDeriveSpec,
+    PerVariantDeriveSpec, ProcDeriveSpec, VerificationMatrixSpec,
 };
 use tatara_rust_macro_rules::MacroRulesSpec;
 use tatara_rust_proc_attr::ProcAttrSpec;
@@ -173,6 +173,17 @@ impl Validate for KindRoundTripSpec {
             check_ident("KindRoundTripSpec.as_byte_method", &self.as_byte_method, &mut v);
             check_ident("KindRoundTripSpec.from_byte_method", &self.from_byte_method, &mut v);
         }
+        v
+    }
+}
+
+impl Validate for VerificationMatrixSpec {
+    fn validate(&self) -> Vec<Violation> {
+        // Both emitted macro identifiers are substituted directly into
+        // `macro_rules! <ident>` heads, so each must be a legal Rust ident.
+        let mut v = vec![];
+        check_ident("VerificationMatrixSpec.matrix_macro", &self.matrix_macro, &mut v);
+        check_ident("VerificationMatrixSpec.covers_macro", &self.covers_macro, &mut v);
         v
     }
 }

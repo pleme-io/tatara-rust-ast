@@ -49,11 +49,13 @@ pub mod kind_round_trip;
 pub mod newtype;
 pub mod per_field;
 pub mod per_variant;
+pub mod verification_matrix;
 pub use enum_fold::{EnumFoldDeriveSpec, EnumFoldTarget};
 pub use kind_round_trip::KindRoundTripSpec;
 pub use newtype::{NewtypeDeriveSpec, NewtypeTarget};
 pub use per_field::{PerFieldDeriveSpec, PerFieldTarget};
 pub use per_variant::{PerVariantDeriveSpec, VariantShape};
+pub use verification_matrix::VerificationMatrixSpec;
 
 pub const SENTINEL_SELF_TYPE: &str = "__SELF_TYPE__";
 pub const SENTINEL_SELF_NAME: &str = "#__SELF_NAME__";

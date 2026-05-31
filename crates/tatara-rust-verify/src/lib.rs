@@ -23,7 +23,7 @@ use tatara_rust_ast::{CrateScaffold, FileEntry};
 use tatara_rust_catalog::{CatalogEntry, CatalogSpec, MacroCatalogSpec, VerifierHint};
 use tatara_rust_derive::{
     EnumFoldDeriveSpec, KindRoundTripSpec, NewtypeDeriveSpec, PerFieldDeriveSpec,
-    PerVariantDeriveSpec,
+    PerVariantDeriveSpec, VerificationMatrixSpec,
 };
 
 /// Render a complete `consumer-verify/` Cargo crate scaffold. The
@@ -108,7 +108,56 @@ fn render_per_kind_body(entry: &CatalogEntry) -> String {
         CatalogSpec::KindRoundTrip { spec } => {
             render_kind_round_trip_smoke(&extern_name, spec)
         }
+        CatalogSpec::VerificationMatrix { spec } => {
+            render_verification_matrix_smoke(&extern_name, spec)
+        }
     }
+}
+
+/// Smoke test for a VerificationMatrix macro crate: import both macros,
+/// declare a 3-row table, drive a passing exercise closure through
+/// `verification_matrix!`, and gate coverage with `matrix_covers_all!`.
+/// Macro names come from the spec so a renamed surface still verifies.
+fn render_verification_matrix_smoke(extern_name: &str, spec: &VerificationMatrixSpec) -> String {
+    let matrix_macro = &spec.matrix_macro;
+    let covers_macro = &spec.covers_macro;
+    format!(
+        r#"    pub use {extern_name}::{{{matrix_macro}, {covers_macro}}};
+
+    #[derive(Debug)]
+    pub struct Row {{
+        pub name: &'static str,
+        pub input: u32,
+        pub doubled: u32,
+    }}
+
+    pub const ROWS: &[Row] = &[
+        Row {{ name: "one", input: 1, doubled: 2 }},
+        Row {{ name: "two", input: 2, doubled: 4 }},
+        Row {{ name: "three", input: 3, doubled: 6 }},
+    ];
+
+    {matrix_macro}! {{
+        name = every_row_doubles,
+        rows = ROWS,
+        run  = |r: &Row| -> ::std::result::Result<(), ::std::string::String> {{
+            if r.input * 2 == r.doubled {{
+                ::std::result::Result::Ok(())
+            }} else {{
+                ::std::result::Result::Err(
+                    ::std::format!("{{}} != {{}}", r.input * 2, r.doubled),
+                )
+            }}
+        }},
+    }}
+
+    {covers_macro}! {{
+        name   = rows_cover_all,
+        rows   = ROWS,
+        covers = 3usize,
+    }}
+"#
+    )
 }
 
 /// Smoke test for a KindRoundTrip derive: a Sample enum using the spec's

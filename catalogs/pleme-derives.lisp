@@ -334,4 +334,14 @@
         :as-byte-method "as_byte"
         :from-byte-method "from_byte"
       ))
+    (
+      :crate-name "pleme-verification-matrix"
+      :description "The farm's first TEST-generation primitive: a dependency-free declarative-macro crate exposing verification_matrix! (one aggregate #[test] over a typed const ROWS: &[Row] table, aggregating every failure before assert) + matrix_covers_all! (a #[test] build-gate asserting ROWS.len() == an enum's variantcount COUNT). Realizes the CLOSED-LOOP MASS-SYNTHESIS verification-matrix-as-forcing-function rule as a consumable; composes with pleme-variantcount-derive. New variant/arm without a matrix row trips the gate."
+      :since "0.1.0"
+      :owner "pleme-io"
+      :kind verification-matrix
+      :spec (
+        :matrix-macro "verification_matrix"
+        :covers-macro "matrix_covers_all"
+      ))
   ))
