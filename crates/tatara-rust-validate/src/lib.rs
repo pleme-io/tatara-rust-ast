@@ -15,8 +15,8 @@
 use serde::{Deserialize, Serialize};
 use tatara_rust_composite::{CompositeDeriveSpec, CompositeMember};
 use tatara_rust_derive::{
-    EnumFoldDeriveSpec, NewtypeDeriveSpec, PerFieldDeriveSpec, PerVariantDeriveSpec,
-    ProcDeriveSpec,
+    EnumFoldDeriveSpec, KindRoundTripSpec, NewtypeDeriveSpec, PerFieldDeriveSpec,
+    PerVariantDeriveSpec, ProcDeriveSpec,
 };
 use tatara_rust_macro_rules::MacroRulesSpec;
 use tatara_rust_proc_attr::ProcAttrSpec;
@@ -154,6 +154,25 @@ impl Validate for EnumFoldDeriveSpec {
             &["#fold", "#fold_count", "#self_name"],
             &mut v,
         );
+        v
+    }
+}
+
+impl Validate for KindRoundTripSpec {
+    fn validate(&self) -> Vec<Violation> {
+        // Fixed-template spec (no splice holes) — the contract that
+        // matters is that every parameterized identifier is a legal Rust
+        // ident, since each is substituted directly into the emitted
+        // proc-macro source.
+        let mut v = vec![];
+        check_ident("KindRoundTripSpec.trait_name", &self.trait_name.0, &mut v);
+        check_ident("KindRoundTripSpec.helper_attr", &self.helper_attr, &mut v);
+        check_ident("KindRoundTripSpec.as_str_method", &self.as_str_method, &mut v);
+        check_ident("KindRoundTripSpec.from_str_method", &self.from_str_method, &mut v);
+        if self.with_byte {
+            check_ident("KindRoundTripSpec.as_byte_method", &self.as_byte_method, &mut v);
+            check_ident("KindRoundTripSpec.from_byte_method", &self.from_byte_method, &mut v);
+        }
         v
     }
 }

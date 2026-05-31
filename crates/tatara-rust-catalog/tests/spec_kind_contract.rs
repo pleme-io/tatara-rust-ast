@@ -13,8 +13,8 @@ use tatara_rust_ast::Ident;
 use tatara_rust_catalog::{CatalogSpec, SpecKind};
 use tatara_rust_composite::CompositeDeriveSpec;
 use tatara_rust_derive::{
-    EnumFoldDeriveSpec, EnumFoldTarget, NewtypeDeriveSpec, NewtypeTarget, PerFieldDeriveSpec,
-    PerFieldTarget, PerVariantDeriveSpec, ProcDeriveSpec, VariantShape,
+    EnumFoldDeriveSpec, EnumFoldTarget, KindRoundTripSpec, NewtypeDeriveSpec, NewtypeTarget,
+    PerFieldDeriveSpec, PerFieldTarget, PerVariantDeriveSpec, ProcDeriveSpec, VariantShape,
 };
 use tatara_rust_macro_rules::{MacroArm, MacroRulesSpec};
 use tatara_rust_proc_attr::{AttrTransform, ProcAttrSpec};
@@ -130,6 +130,12 @@ fn every_variant() -> Vec<(CatalogSpec, &'static str)> {
             },
             "composite",
         ),
+        (
+            CatalogSpec::KindRoundTrip {
+                spec: KindRoundTripSpec::kind_byte("KindRoundTripSample"),
+            },
+            "kind-round-trip",
+        ),
     ]
 }
 
@@ -178,8 +184,8 @@ fn variant_count_matches_expected_total() {
     // both fail (and that's the point).
     let count = every_variant().len();
     assert_eq!(
-        count, 9,
-        "every_variant() must cover every CatalogSpec variant; got {count}, expected 9"
+        count, 10,
+        "every_variant() must cover every CatalogSpec variant; got {count}, expected 10"
     );
 }
 

@@ -19,8 +19,8 @@ use std::collections::BTreeSet;
 use tatara_rust_ast::{AstError, CompileToCrate, CrateScaffold};
 use tatara_rust_composite::CompositeDeriveSpec;
 use tatara_rust_derive::{
-    EnumFoldDeriveSpec, NewtypeDeriveSpec, PerFieldDeriveSpec, PerVariantDeriveSpec,
-    ProcDeriveSpec,
+    EnumFoldDeriveSpec, KindRoundTripSpec, NewtypeDeriveSpec, PerFieldDeriveSpec,
+    PerVariantDeriveSpec, ProcDeriveSpec,
 };
 use tatara_rust_macro_rules::MacroRulesSpec;
 use tatara_rust_proc_attr::ProcAttrSpec;
@@ -136,6 +136,7 @@ pub enum CatalogSpec {
     ProcFn { spec: ProcFnSpec },
     MacroRules { spec: MacroRulesSpec },
     Composite { spec: CompositeDeriveSpec },
+    KindRoundTrip { spec: KindRoundTripSpec },
 }
 
 /// Self-describing capability surface every catalog-eligible Spec
@@ -195,6 +196,10 @@ impl SpecKind for CompositeDeriveSpec {
     fn kind_label(&self) -> &'static str { "composite" }
     fn trait_name_for_verifier(&self) -> &str { &self.bundle_name.0 }
 }
+impl SpecKind for KindRoundTripSpec {
+    fn kind_label(&self) -> &'static str { "kind-round-trip" }
+    fn trait_name_for_verifier(&self) -> &str { &self.trait_name.0 }
+}
 
 impl CatalogSpec {
     /// **Single dispatch surface** — returns the inner Spec as
@@ -211,6 +216,7 @@ impl CatalogSpec {
             Self::ProcFn { spec } => spec,
             Self::MacroRules { spec } => spec,
             Self::Composite { spec } => spec,
+            Self::KindRoundTrip { spec } => spec,
         }
     }
 

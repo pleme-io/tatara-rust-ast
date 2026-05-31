@@ -12,8 +12,8 @@ use tatara_rust_ast::Ident;
 use tatara_rust_catalog::{CatalogEntry, CatalogSpec, MacroCatalogSpec};
 use tatara_rust_composite::{CompositeDeriveSpec, CompositeMember};
 use tatara_rust_derive::{
-    EnumFoldDeriveSpec, EnumFoldTarget, NewtypeDeriveSpec, NewtypeTarget, PerFieldDeriveSpec,
-    PerFieldTarget, PerVariantDeriveSpec, ProcDeriveSpec, VariantShape,
+    EnumFoldDeriveSpec, EnumFoldTarget, KindRoundTripSpec, NewtypeDeriveSpec, NewtypeTarget,
+    PerFieldDeriveSpec, PerFieldTarget, PerVariantDeriveSpec, ProcDeriveSpec, VariantShape,
 };
 use tatara_rust_macro_rules::{MacroArm, MacroRulesSpec};
 use tatara_rust_proc_attr::{AttrTransform, ProcAttrSpec};
@@ -215,6 +215,12 @@ fn all_kinds() -> Vec<(&'static str, CatalogSpec)> {
                 },
             },
         ),
+        (
+            "kind-round-trip",
+            CatalogSpec::KindRoundTrip {
+                spec: KindRoundTripSpec::kind_byte("MatrixKindRoundTrip"),
+            },
+        ),
     ]
 }
 
@@ -299,9 +305,9 @@ fn matrix_covers_every_catalog_spec_variant() {
     // Forcing function: every variant of CatalogSpec MUST appear in
     // `all_kinds()`. New variants without a matrix row trip this test.
     let kind_count = all_kinds().len();
-    // CatalogSpec currently has 9 variants — adjust if a new kind lands.
+    // CatalogSpec currently has 10 variants — adjust if a new kind lands.
     assert_eq!(
-        kind_count, 9,
-        "matrix must cover every CatalogSpec variant; got {kind_count}, expected 9"
+        kind_count, 10,
+        "matrix must cover every CatalogSpec variant; got {kind_count}, expected 10"
     );
 }
