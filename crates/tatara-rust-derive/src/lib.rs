@@ -44,12 +44,14 @@
 use serde::{Deserialize, Serialize};
 use tatara_rust_ast::{AstError, CompileToCrate, CrateScaffold, Ident, Impl, ToRustTokens};
 
+pub mod closed_axis;
 pub mod enum_fold;
 pub mod kind_round_trip;
 pub mod newtype;
 pub mod per_field;
 pub mod per_variant;
 pub mod verification_matrix;
+pub use closed_axis::ClosedAxisSpec;
 pub use enum_fold::{EnumFoldDeriveSpec, EnumFoldTarget};
 pub use kind_round_trip::KindRoundTripSpec;
 pub use newtype::{NewtypeDeriveSpec, NewtypeTarget};

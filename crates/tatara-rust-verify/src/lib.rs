@@ -22,7 +22,7 @@
 use tatara_rust_ast::{CrateScaffold, FileEntry};
 use tatara_rust_catalog::{CatalogEntry, CatalogSpec, MacroCatalogSpec, VerifierHint};
 use tatara_rust_derive::{
-    EnumFoldDeriveSpec, KindRoundTripSpec, NewtypeDeriveSpec, PerFieldDeriveSpec,
+    ClosedAxisSpec, EnumFoldDeriveSpec, KindRoundTripSpec, NewtypeDeriveSpec, PerFieldDeriveSpec,
     PerVariantDeriveSpec, VerificationMatrixSpec,
 };
 
@@ -111,7 +111,47 @@ fn render_per_kind_body(entry: &CatalogEntry) -> String {
         CatalogSpec::VerificationMatrix { spec } => {
             render_verification_matrix_smoke(&extern_name, spec)
         }
+        CatalogSpec::ClosedAxis { spec } => {
+            render_closed_axis_smoke(&extern_name, spec)
+        }
     }
+}
+
+/// Smoke test for a ClosedAxis derive: a unit enum with the
+/// `Copy + Eq + Hash` bounds the `shikumi::ClosedAxis` trait requires,
+/// `#[derive(ClosedAxis)]`, then asserts the inherent `Self::ALL`
+/// enumerates every variant.
+///
+/// The derive ALSO emits `impl shikumi::ClosedAxis for Self`, but the
+/// auto-generated `consumer-verify` crate doesn't depend on shikumi, so
+/// this smoke asserts only the inherent `Self::ALL` half (always
+/// emitted, no external dep). The trait-impl half is exercised where the
+/// derive is consumed against a real shikumi (e.g. mado's config cube).
+fn render_closed_axis_smoke(extern_name: &str, spec: &ClosedAxisSpec) -> String {
+    let trait_name = &spec.trait_name.0;
+    format!(
+        r#"    use {extern_name}::{trait_name};
+
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, {trait_name})]
+    pub enum Sample {{
+        Block,
+        Bar,
+        Underline,
+    }}
+
+    #[cfg(test)]
+    mod tests {{
+        use super::*;
+        #[test]
+        fn inherent_all_enumerates_every_variant() {{
+            assert_eq!(Sample::ALL.len(), 3);
+            assert!(Sample::ALL.iter().any(|v| matches!(v, Sample::Block)));
+            assert!(Sample::ALL.iter().any(|v| matches!(v, Sample::Bar)));
+            assert!(Sample::ALL.iter().any(|v| matches!(v, Sample::Underline)));
+        }}
+    }}
+"#
+    )
 }
 
 /// Smoke test for a VerificationMatrix macro crate: import both macros,

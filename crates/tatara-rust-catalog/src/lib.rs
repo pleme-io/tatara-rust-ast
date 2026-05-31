@@ -19,7 +19,7 @@ use std::collections::BTreeSet;
 use tatara_rust_ast::{AstError, CompileToCrate, CrateScaffold};
 use tatara_rust_composite::CompositeDeriveSpec;
 use tatara_rust_derive::{
-    EnumFoldDeriveSpec, KindRoundTripSpec, NewtypeDeriveSpec, PerFieldDeriveSpec,
+    ClosedAxisSpec, EnumFoldDeriveSpec, KindRoundTripSpec, NewtypeDeriveSpec, PerFieldDeriveSpec,
     PerVariantDeriveSpec, ProcDeriveSpec, VerificationMatrixSpec,
 };
 use tatara_rust_macro_rules::MacroRulesSpec;
@@ -138,6 +138,7 @@ pub enum CatalogSpec {
     Composite { spec: CompositeDeriveSpec },
     KindRoundTrip { spec: KindRoundTripSpec },
     VerificationMatrix { spec: VerificationMatrixSpec },
+    ClosedAxis { spec: ClosedAxisSpec },
 }
 
 /// Self-describing capability surface every catalog-eligible Spec
@@ -205,6 +206,10 @@ impl SpecKind for VerificationMatrixSpec {
     fn kind_label(&self) -> &'static str { "verification-matrix" }
     fn trait_name_for_verifier(&self) -> &str { self.primary_name() }
 }
+impl SpecKind for ClosedAxisSpec {
+    fn kind_label(&self) -> &'static str { "closed-axis" }
+    fn trait_name_for_verifier(&self) -> &str { &self.trait_name.0 }
+}
 
 impl CatalogSpec {
     /// **Single dispatch surface** — returns the inner Spec as
@@ -223,6 +228,7 @@ impl CatalogSpec {
             Self::Composite { spec } => spec,
             Self::KindRoundTrip { spec } => spec,
             Self::VerificationMatrix { spec } => spec,
+            Self::ClosedAxis { spec } => spec,
         }
     }
 

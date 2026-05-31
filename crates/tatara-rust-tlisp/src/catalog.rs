@@ -33,9 +33,9 @@ use tatara_rust_ast::Ident;
 use tatara_rust_catalog::{CatalogEntry, CatalogSpec, MacroCatalogSpec, VerifierHint};
 use tatara_rust_composite::CompositeDeriveSpec;
 use tatara_rust_derive::{
-    EnumFoldDeriveSpec, EnumFoldTarget, KindRoundTripSpec, NewtypeDeriveSpec, NewtypeTarget,
-    PerFieldDeriveSpec, PerFieldTarget, PerVariantDeriveSpec, ProcDeriveSpec, VariantShape,
-    VerificationMatrixSpec,
+    ClosedAxisSpec, EnumFoldDeriveSpec, EnumFoldTarget, KindRoundTripSpec, NewtypeDeriveSpec,
+    NewtypeTarget, PerFieldDeriveSpec, PerFieldTarget, PerVariantDeriveSpec, ProcDeriveSpec,
+    VariantShape, VerificationMatrixSpec,
 };
 use tatara_rust_macro_rules::{MacroArm, MacroRulesSpec};
 use tatara_rust_proc_attr::{AttrTransform, ProcAttrSpec};
@@ -101,7 +101,7 @@ pub enum ParseError {
     MissingKeyword(String, String),
     #[error("value for `:{0}` has wrong shape: {1}")]
     ShapeError(String, String),
-    #[error("unknown spec kind `{0}` (expected derive | per-field | per-variant | newtype | enum-fold | proc-attr | proc-fn | macro-rules | composite | kind-round-trip | verification-matrix)")]
+    #[error("unknown spec kind `{0}` (expected derive | per-field | per-variant | newtype | enum-fold | proc-attr | proc-fn | macro-rules | composite | kind-round-trip | verification-matrix | closed-axis)")]
     UnknownKind(String),
     #[error("unknown verifier hint `{0}`")]
     UnknownHint(String),
@@ -446,6 +446,9 @@ fn parse_spec(kind: &str, items: &[SExpr]) -> Result<CatalogSpec, ParseError> {
         "verification-matrix" => Ok(CatalogSpec::VerificationMatrix {
             spec: parse_verification_matrix_spec(items)?,
         }),
+        "closed-axis" => Ok(CatalogSpec::ClosedAxis {
+            spec: parse_closed_axis_spec(items)?,
+        }),
         other => Err(ParseError::UnknownKind(other.to_string())),
     }
 }
@@ -456,6 +459,13 @@ fn parse_verification_matrix_spec(
     Ok(VerificationMatrixSpec {
         matrix_macro: expect_str_kw(items, "matrix-macro")?,
         covers_macro: expect_str_kw(items, "covers-macro")?,
+    })
+}
+
+fn parse_closed_axis_spec(items: &[SExpr]) -> Result<ClosedAxisSpec, ParseError> {
+    Ok(ClosedAxisSpec {
+        trait_name: Ident::new(expect_str_kw(items, "trait-name")?),
+        axis_trait_path: expect_str_kw(items, "axis-trait-path")?,
     })
 }
 
@@ -808,6 +818,16 @@ fn render_spec_body(spec: &CatalogSpec) -> String {
             s.push_str(&format!(
                 "        :covers-macro {}\n",
                 quote_str(&spec.covers_macro)
+            ));
+        }
+        CatalogSpec::ClosedAxis { spec } => {
+            s.push_str(&format!(
+                "        :trait-name {}\n",
+                quote_str(&spec.trait_name.0)
+            ));
+            s.push_str(&format!(
+                "        :axis-trait-path {}\n",
+                quote_str(&spec.axis_trait_path)
             ));
         }
     }

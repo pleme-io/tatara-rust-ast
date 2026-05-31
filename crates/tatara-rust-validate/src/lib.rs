@@ -15,7 +15,7 @@
 use serde::{Deserialize, Serialize};
 use tatara_rust_composite::{CompositeDeriveSpec, CompositeMember};
 use tatara_rust_derive::{
-    EnumFoldDeriveSpec, KindRoundTripSpec, NewtypeDeriveSpec, PerFieldDeriveSpec,
+    ClosedAxisSpec, EnumFoldDeriveSpec, KindRoundTripSpec, NewtypeDeriveSpec, PerFieldDeriveSpec,
     PerVariantDeriveSpec, ProcDeriveSpec, VerificationMatrixSpec,
 };
 use tatara_rust_macro_rules::MacroRulesSpec;
@@ -59,6 +59,10 @@ pub enum Violation {
 
     /// `PrependPrelude { prelude_tokens: "" }` is a no-op transform.
     EmptyPreludeTokens { spec_name: String },
+
+    /// `ClosedAxisSpec.axis_trait_path` is empty — the emitted
+    /// `impl <path> for Self` would be `impl  for Self` and fail to parse.
+    EmptyTraitPath { spec_name: String },
 }
 
 pub trait Validate {
@@ -172,6 +176,23 @@ impl Validate for KindRoundTripSpec {
         if self.with_byte {
             check_ident("KindRoundTripSpec.as_byte_method", &self.as_byte_method, &mut v);
             check_ident("KindRoundTripSpec.from_byte_method", &self.from_byte_method, &mut v);
+        }
+        v
+    }
+}
+
+impl Validate for ClosedAxisSpec {
+    fn validate(&self) -> Vec<Violation> {
+        // `trait_name` is the `#[derive(<id>)]` identifier — a legal Rust
+        // ident. `axis_trait_path` is a fully-qualified path (`::a::B`),
+        // substituted into `impl <path> for Self`, so it just has to be
+        // non-empty; rustc validates the path at consumer compile time.
+        let mut v = vec![];
+        check_ident("ClosedAxisSpec.trait_name", &self.trait_name.0, &mut v);
+        if self.axis_trait_path.trim().is_empty() {
+            v.push(Violation::EmptyTraitPath {
+                spec_name: self.trait_name.0.clone(),
+            });
         }
         v
     }

@@ -344,4 +344,14 @@
         :matrix-macro "verification_matrix"
         :covers-macro "matrix_covers_all"
       ))
+    (
+      :crate-name "pleme-closedaxis-derive"
+      :description "allvariants targeting the shikumi ClosedAxis trait: for a unit enum, emits the inherent pub const ALL: &'static [Self] PLUS impl shikumi::ClosedAxis for Self bound to the same slice, so the enum plugs straight into shikumi::axis_iter / axis_cardinality / ProductCube with zero hand-written ALL. Delegates emission to the proven EnumFold emitter (no duplicated emission path). Consumer enum must derive Copy + Eq + Hash for the trait bound."
+      :since "0.1.0"
+      :owner "pleme-io"
+      :kind closed-axis
+      :spec (
+        :trait-name "ClosedAxis"
+        :axis-trait-path "::shikumi::ClosedAxis"
+      ))
   ))
