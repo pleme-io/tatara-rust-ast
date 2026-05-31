@@ -758,11 +758,17 @@ dependencies = [
 name = "tatara-rust-verify"
 version = "0.1.0"
 dependencies = [
+ "prettyplease",
+ "proc-macro2",
+ "quote",
  "serde",
+ "syn",
  "tatara-rust-ast",
  "tatara-rust-catalog",
  "tatara-rust-composite",
  "tatara-rust-derive",
+ "tatara-rust-snapshot",
+ "toml",
 ]
 
 [[package]]
