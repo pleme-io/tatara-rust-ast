@@ -13,13 +13,14 @@
 use tatara_rust_ast::CompileToCrate;
 use tatara_rust_examples::verification_matrix_spec;
 
-/// The emitted macro bodies, `include!`d at file scope so the two
-/// `#[macro_export]` macros land crate-globally (the emitted crate is a
-/// NORMAL lib, so its `macro_rules!` source includes cleanly — no
-/// proc-macro plumbing). The committed file is the emission with its
-/// leading crate-inner `#![doc]` header stripped (see [`macro_body`] +
-/// the determinism test) because crate-inner attributes are illegal
-/// inside an `include!`d fragment.
+// The emitted macro bodies, `include!`d at file scope so the two
+// `#[macro_export]` macros land crate-globally (the emitted crate is a
+// NORMAL lib, so its `macro_rules!` source includes cleanly — no
+// proc-macro plumbing). The committed file is the emission with its
+// leading crate-inner `#![doc]` header stripped (see `macro_body` +
+// the determinism test) because crate-inner attributes are illegal
+// inside an `include!`d fragment. (Plain `//`, not `///`: a doc comment
+// cannot attach to a macro invocation — rustc warns "unused doc comment".)
 include!("verification_matrix_emitted.rs");
 
 /// Drop the leading crate-inner doc header (`#![doc=...]` /
