@@ -33,8 +33,8 @@ use tatara_rust_ast::Ident;
 use tatara_rust_catalog::{CatalogEntry, CatalogSpec, MacroCatalogSpec, VerifierHint};
 use tatara_rust_composite::CompositeDeriveSpec;
 use tatara_rust_derive::{
-    EnumFoldDeriveSpec, EnumFoldTarget, NewtypeDeriveSpec, NewtypeTarget, PerFieldDeriveSpec,
-    PerFieldTarget, PerVariantDeriveSpec, ProcDeriveSpec, VariantShape,
+    EnumFoldDeriveSpec, EnumFoldTarget, KindRoundTripSpec, NewtypeDeriveSpec, NewtypeTarget,
+    PerFieldDeriveSpec, PerFieldTarget, PerVariantDeriveSpec, ProcDeriveSpec, VariantShape,
 };
 use tatara_rust_macro_rules::{MacroArm, MacroRulesSpec};
 use tatara_rust_proc_attr::{AttrTransform, ProcAttrSpec};
@@ -173,26 +173,33 @@ impl<'a> Parser<'a> {
         let start = self.pos;
         debug_assert_eq!(self.src[self.pos], b'"');
         self.pos += 1;
-        let mut out = String::new();
+        // Accumulate raw bytes and decode the whole literal as UTF-8 at
+        // the close-quote. Pushing `byte as char` would mangle every
+        // multi-byte char (an em-dash's 0xE2 0x80 0x94 would become three
+        // Latin-1 chars); escapes resolve to single ASCII bytes, so they
+        // compose with the raw byte stream cleanly.
+        let mut buf: Vec<u8> = Vec::new();
         while self.pos < self.src.len() {
             let b = self.src[self.pos];
             if b == b'"' {
                 self.pos += 1;
+                let out = String::from_utf8(buf)
+                    .map_err(|_| ParseError::Unexpected('?', start))?;
                 return Ok(SExpr::Str(out));
             }
             if b == b'\\' && self.pos + 1 < self.src.len() {
                 self.pos += 1;
                 match self.src[self.pos] {
-                    b'"' => out.push('"'),
-                    b'\\' => out.push('\\'),
-                    b'n' => out.push('\n'),
-                    b't' => out.push('\t'),
-                    other => out.push(other as char),
+                    b'"' => buf.push(b'"'),
+                    b'\\' => buf.push(b'\\'),
+                    b'n' => buf.push(b'\n'),
+                    b't' => buf.push(b'\t'),
+                    other => buf.push(other),
                 }
                 self.pos += 1;
                 continue;
             }
-            out.push(b as char);
+            buf.push(b);
             self.pos += 1;
         }
         Err(ParseError::UnterminatedString(start))
@@ -432,8 +439,23 @@ fn parse_spec(kind: &str, items: &[SExpr]) -> Result<CatalogSpec, ParseError> {
                 members: vec![],
             },
         }),
+        "kind-round-trip" => Ok(CatalogSpec::KindRoundTrip {
+            spec: parse_kind_round_trip_spec(items)?,
+        }),
         other => Err(ParseError::UnknownKind(other.to_string())),
     }
+}
+
+fn parse_kind_round_trip_spec(items: &[SExpr]) -> Result<KindRoundTripSpec, ParseError> {
+    Ok(KindRoundTripSpec {
+        trait_name: Ident::new(expect_str_kw(items, "trait-name")?),
+        helper_attr: expect_str_kw(items, "helper-attr")?,
+        as_str_method: expect_str_kw(items, "as-str-method")?,
+        from_str_method: expect_str_kw(items, "from-str-method")?,
+        with_byte: opt_bool_kw(items, "with-byte"),
+        as_byte_method: expect_str_kw(items, "as-byte-method")?,
+        from_byte_method: expect_str_kw(items, "from-byte-method")?,
+    })
 }
 
 fn parse_per_field_spec(items: &[SExpr]) -> Result<PerFieldDeriveSpec, ParseError> {
@@ -562,6 +584,12 @@ fn opt_str_list_kw(items: &[SExpr], kw: &str) -> Vec<String> {
         Ok(SExpr::List(l)) => l.iter().filter_map(|e| e.as_str().map(String::from)).collect(),
         _ => vec![],
     }
+}
+
+/// Read a `:keyword t|true` boolean symbol; absent or any other value is
+/// `false`. Round-trips with the `t`/`nil` rendering below.
+fn opt_bool_kw(items: &[SExpr], kw: &str) -> bool {
+    matches!(find_kw_value(items, kw), Ok(SExpr::Sym(s)) if s == "t" || s == "true")
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -727,6 +755,38 @@ fn render_spec_body(spec: &CatalogSpec) -> String {
                 quote_str(&spec.bundle_name.0)
             ));
         }
+        CatalogSpec::KindRoundTrip { spec } => {
+            // All seven fields rendered explicitly so
+            // parse(render(spec)) == spec for any KindRoundTripSpec.
+            s.push_str(&format!(
+                "        :trait-name {}\n",
+                quote_str(&spec.trait_name.0)
+            ));
+            s.push_str(&format!(
+                "        :helper-attr {}\n",
+                quote_str(&spec.helper_attr)
+            ));
+            s.push_str(&format!(
+                "        :as-str-method {}\n",
+                quote_str(&spec.as_str_method)
+            ));
+            s.push_str(&format!(
+                "        :from-str-method {}\n",
+                quote_str(&spec.from_str_method)
+            ));
+            s.push_str(&format!(
+                "        :with-byte {}\n",
+                if spec.with_byte { "t" } else { "nil" }
+            ));
+            s.push_str(&format!(
+                "        :as-byte-method {}\n",
+                quote_str(&spec.as_byte_method)
+            ));
+            s.push_str(&format!(
+                "        :from-byte-method {}\n",
+                quote_str(&spec.from_byte_method)
+            ));
+        }
     }
     s
 }
@@ -886,6 +946,19 @@ mod tests {
                         },
                     },
                 },
+                CatalogEntry {
+                    crate_name: "kindstr-derive".into(),
+                    description: "x".into(),
+                    since: "0.1.0".into(),
+                    owner: "y".into(),
+                    verifier_hint: None,
+                    // byte mode exercises every renderable field (with-byte t
+                    // + byte method names), so the round-trip covers the full
+                    // KindRoundTrip parse/render branch.
+                    spec: CatalogSpec::KindRoundTrip {
+                        spec: KindRoundTripSpec::kind_byte("ClipKind"),
+                    },
+                },
             ],
         };
         let rendered = render_macrocatalog(&cat);
@@ -939,6 +1012,34 @@ mod tests {
     }
 
     #[test]
+    fn parser_preserves_multibyte_utf8_in_strings() {
+        // Regression: the lexer used to push each byte as `byte as char`,
+        // mangling multi-byte UTF-8 (em-dash → three Latin-1 chars). Mixed
+        // escape + multibyte content must survive verbatim.
+        let src = "\
+(defmacrocatalog uni
+  :entries (
+    (:crate-name \"a\"
+     :description \"em—dash, accent café, emoji 🚀, escaped \\\"q\\\"\"
+     :since \"0.1.0\"
+     :owner \"y\"
+     :kind per-field
+     :spec (:trait-name \"A\"
+            :target named-struct
+            :per-field-template \"pub fn x() {}\"))
+  ))
+";
+        let parsed = parse_macrocatalog(src).unwrap();
+        assert_eq!(
+            parsed.entries[0].description,
+            "em—dash, accent café, emoji 🚀, escaped \"q\""
+        );
+        // And it round-trips through render unchanged.
+        let reparsed = parse_macrocatalog(&render_macrocatalog(&parsed)).unwrap();
+        assert_eq!(reparsed, parsed);
+    }
+
+    #[test]
     fn missing_required_keyword_errors() {
         let src = r#"
 (defmacrocatalog bad
@@ -979,5 +1080,53 @@ mod tests {
         let rendered = render_macrocatalog(&cat);
         let parsed = parse_macrocatalog(&rendered).unwrap();
         assert_eq!(parsed, cat);
+    }
+
+    /// Integration test promised by the module doc: the shipped
+    /// `catalogs/pleme-derives.lisp` parses, every entry validates clean,
+    /// and re-rendering it round-trips. Also pins the two authored
+    /// kind-round-trip entries.
+    #[test]
+    fn shipped_pleme_derives_catalog_parses_validates_and_round_trips() {
+        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../catalogs/pleme-derives.lisp");
+        let src = std::fs::read_to_string(path)
+            .unwrap_or_else(|e| panic!("read {path}: {e}"));
+
+        let cat = parse_macrocatalog(&src).expect("shipped catalog must parse");
+
+        // Every entry is structurally well-formed.
+        for e in &cat.entries {
+            let violations = e.spec.validate();
+            assert!(
+                violations.is_empty(),
+                "{} has violations: {violations:?}",
+                e.crate_name
+            );
+        }
+
+        // Re-render → re-parse is idempotent (canonical round-trip).
+        let reparsed = parse_macrocatalog(&render_macrocatalog(&cat)).unwrap();
+        assert_eq!(reparsed, cat);
+
+        // The two authored kind-round-trip derives are present with the
+        // expected modes.
+        let kindstr = cat
+            .entries
+            .iter()
+            .find(|e| e.crate_name == "pleme-kindstr-derive")
+            .expect("pleme-kindstr-derive entry missing");
+        assert!(matches!(
+            &kindstr.spec,
+            CatalogSpec::KindRoundTrip { spec } if !spec.with_byte && spec.trait_name.0 == "KindStr"
+        ));
+        let kindbyte = cat
+            .entries
+            .iter()
+            .find(|e| e.crate_name == "pleme-kindbyte-derive")
+            .expect("pleme-kindbyte-derive entry missing");
+        assert!(matches!(
+            &kindbyte.spec,
+            CatalogSpec::KindRoundTrip { spec } if spec.with_byte && spec.trait_name.0 == "KindByte"
+        ));
     }
 }

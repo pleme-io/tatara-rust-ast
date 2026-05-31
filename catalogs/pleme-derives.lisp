@@ -304,4 +304,34 @@
         :per-field-template "pub fn #method_ident(&mut self, other: &mut Self) { ::std::mem::swap(&mut self.#field_name, &mut other.#field_name); }"
         :method-name-template "swap_{}"
       ))
+    (
+      :crate-name "pleme-kindstr-derive"
+      :description "Paired string round-trip over a unit-variant enum: pub fn as_str(&self) -> &'static str + pub fn from_str_kind(&str) -> Option<Self>, both folded from one variant walk so the inverse-table property holds by construction. Honors per-variant #[kind(name = \"...\", alias = \"...\")] helper attrs."
+      :since "0.1.0"
+      :owner "pleme-io"
+      :kind kind-round-trip
+      :spec (
+        :trait-name "KindStr"
+        :helper-attr "kind"
+        :as-str-method "as_str"
+        :from-str-method "from_str_kind"
+        :with-byte nil
+        :as-byte-method "as_byte"
+        :from-byte-method "from_byte"
+      ))
+    (
+      :crate-name "pleme-kindbyte-derive"
+      :description "Paired string+byte round-trip over a unit-variant enum: the KindStr pair plus pub fn as_byte(&self) -> u8 + pub fn from_byte(u8) -> Option<Self>. Every variant must carry #[kind(byte = N)]; for wire formats like OSC52 clipboard selectors. Honors #[kind(name/alias/byte)]."
+      :since "0.1.0"
+      :owner "pleme-io"
+      :kind kind-round-trip
+      :spec (
+        :trait-name "KindByte"
+        :helper-attr "kind"
+        :as-str-method "as_str"
+        :from-str-method "from_str_kind"
+        :with-byte t
+        :as-byte-method "as_byte"
+        :from-byte-method "from_byte"
+      ))
   ))

@@ -22,7 +22,8 @@
 use tatara_rust_ast::{CrateScaffold, FileEntry};
 use tatara_rust_catalog::{CatalogEntry, CatalogSpec, MacroCatalogSpec, VerifierHint};
 use tatara_rust_derive::{
-    EnumFoldDeriveSpec, NewtypeDeriveSpec, PerFieldDeriveSpec, PerVariantDeriveSpec,
+    EnumFoldDeriveSpec, KindRoundTripSpec, NewtypeDeriveSpec, PerFieldDeriveSpec,
+    PerVariantDeriveSpec,
 };
 
 /// Render a complete `consumer-verify/` Cargo crate scaffold. The
@@ -104,6 +105,82 @@ fn render_per_kind_body(entry: &CatalogEntry) -> String {
         CatalogSpec::Composite { spec } => {
             render_marker_smoke(&extern_name, &spec.bundle_name.0)
         }
+        CatalogSpec::KindRoundTrip { spec } => {
+            render_kind_round_trip_smoke(&extern_name, spec)
+        }
+    }
+}
+
+/// Smoke test for a KindRoundTrip derive: a Sample enum using the spec's
+/// helper attr + a test asserting the inverse-table property holds (string
+/// always; byte too when `with_byte`). Method/attr names come from the
+/// spec so a renamed surface still verifies.
+fn render_kind_round_trip_smoke(extern_name: &str, spec: &KindRoundTripSpec) -> String {
+    let trait_name = &spec.trait_name.0;
+    let attr = &spec.helper_attr;
+    let as_str = &spec.as_str_method;
+    let from_str = &spec.from_str_method;
+    if spec.with_byte {
+        let as_byte = &spec.as_byte_method;
+        let from_byte = &spec.from_byte_method;
+        format!(
+            r#"    use {extern_name}::{trait_name};
+
+    #[derive(Debug, PartialEq, Clone, Copy, {trait_name})]
+    pub enum Sample {{
+        #[{attr}(name = "alpha", byte = 97)]
+        Alpha,
+        #[{attr}(name = "beta", alias = "b", byte = 98)]
+        Beta,
+    }}
+
+    #[cfg(test)]
+    mod tests {{
+        use super::*;
+        #[test]
+        fn string_and_byte_round_trip() {{
+            assert_eq!(Sample::Alpha.{as_str}(), "alpha");
+            assert_eq!(Sample::Alpha.{as_byte}(), 97u8);
+            assert_eq!(Sample::{from_str}("b"), Some(Sample::Beta));
+            assert_eq!(Sample::{from_byte}(98), Some(Sample::Beta));
+            assert_eq!(Sample::{from_str}("nope"), None);
+            for v in [Sample::Alpha, Sample::Beta] {{
+                assert_eq!(Sample::{from_str}(v.{as_str}()), Some(v));
+                assert_eq!(Sample::{from_byte}(v.{as_byte}()), Some(v));
+            }}
+        }}
+    }}
+"#
+        )
+    } else {
+        format!(
+            r#"    use {extern_name}::{trait_name};
+
+    #[derive(Debug, PartialEq, Clone, Copy, {trait_name})]
+    pub enum Sample {{
+        #[{attr}(name = "alpha")]
+        Alpha,
+        #[{attr}(name = "beta", alias = "b")]
+        Beta,
+        Gamma,
+    }}
+
+    #[cfg(test)]
+    mod tests {{
+        use super::*;
+        #[test]
+        fn string_round_trip() {{
+            assert_eq!(Sample::Alpha.{as_str}(), "alpha");
+            assert_eq!(Sample::Gamma.{as_str}(), "Gamma");
+            assert_eq!(Sample::{from_str}("b"), Some(Sample::Beta));
+            assert_eq!(Sample::{from_str}("nope"), None);
+            for v in [Sample::Alpha, Sample::Beta, Sample::Gamma] {{
+                assert_eq!(Sample::{from_str}(v.{as_str}()), Some(v));
+            }}
+        }}
+    }}
+"#
+        )
     }
 }
 
