@@ -28,7 +28,8 @@ pub struct RepoPublishSpec {
     /// `org/name` form — used in `gh repo create` and as the
     /// remote URL.
     pub full_name: String,
-    /// Short description (--description). Truncated to 100 chars by gh.
+    /// Repo description (`--description`). Capped to GitHub's 350-char
+    /// limit on a char boundary before the `gh repo create` call.
     pub description: String,
     /// First-commit message; defaults to `"init: <name> (generated)"`.
     pub commit_message: Option<String>,
@@ -223,7 +224,12 @@ pub fn publish_repo(
     let repo_exists = exists.status.success();
 
     if !repo_exists {
-        // 5a. Create + push in one call.
+        // 5a. Create + push in one call. GitHub rejects repo descriptions
+        // longer than 350 chars (`createRepository` GraphQL error), so cap
+        // it on a char boundary — the catalog's rich one-liners routinely
+        // exceed that. The full description still lives in the crate's
+        // README / Cargo.toml; the GitHub blurb is just a teaser.
+        let gh_description = cap_chars(&spec.description, 350);
         let out = run(
             "gh",
             &[
@@ -232,7 +238,7 @@ pub fn publish_repo(
                 &full_name,
                 cfg.visibility.gh_flag(),
                 "--description",
-                &spec.description,
+                &gh_description,
                 "--source=.",
                 "--push",
             ],
@@ -335,6 +341,17 @@ fn run(program: &str, args: &[&str], cwd: &Path) -> std::io::Result<Output> {
         .output()
 }
 
+/// Truncate `s` to at most `max` chars on a UTF-8 char boundary. Used to
+/// fit a catalog description into GitHub's 350-char repo-description limit
+/// without panicking on multi-byte boundaries (descriptions contain `—`,
+/// `…`, etc.). Returns `s` unchanged when already within `max`.
+fn cap_chars(s: &str, max: usize) -> String {
+    match s.char_indices().nth(max) {
+        None => s.to_owned(),
+        Some((byte_idx, _)) => s[..byte_idx].to_owned(),
+    }
+}
+
 fn failed_from(full_name: &str, step: PublishStep, out: &Output) -> PublishOutcome {
     PublishOutcome::Failed {
         full_name: full_name.into(),
@@ -352,6 +369,20 @@ mod tests {
     fn step_labels_are_stable() {
         assert_eq!(PublishStep::GitInit.label(), "git-init");
         assert_eq!(PublishStep::GhRepoCreate.label(), "gh-repo-create");
+    }
+
+    #[test]
+    fn cap_chars_respects_limit_and_char_boundaries() {
+        assert_eq!(cap_chars("short", 350), "short");
+        // Exactly at the limit is unchanged.
+        let s40 = "a".repeat(40);
+        assert_eq!(cap_chars(&s40, 40), s40);
+        // Over the limit truncates to `max` chars.
+        let s400 = "b".repeat(400);
+        assert_eq!(cap_chars(&s400, 350).chars().count(), 350);
+        // Multi-byte chars never split mid-codepoint (would panic on a
+        // byte-index slice). Each `—` is 3 bytes; cap at 2 chars = 6 bytes.
+        assert_eq!(cap_chars("—————", 2), "——");
     }
 
     #[test]
