@@ -17,12 +17,26 @@ The pleme-io macro farm's typed engine. 16 crates that compose into:
    via `quote!{}` + `syn::parse2` + `prettyplease::unparse`.
 3. **Catalog** (`MacroCatalogSpec`) that bundles N entries with
    per-entry metadata (description, since, owner, verifier_hint).
-4. **Operator CLI** (`tatara-rust-forge`) with 6 subcommands —
-   `emit-spec`, `catalog-emit-repos`, `catalog-emit-verify`,
-   `catalog-gate-all`, `catalog-publish-all`, `catalog-instantiate`.
+4. **Operator CLI** (`tatara-rust-forge`) — `emit-spec`,
+   `catalog-{emit-repos,emit-verify,gate-all,publish-all,instantiate}`,
+   `catalog-{from,to}-lisp`, `catalog-emit-docs`, and the
+   `survey-{,apply,apply-all,fleet,fleet-returns,fleet-apply,fleet-validate}`
+   adoption family.
 5. **Verification primitives** (`snapshot_spec!`,
    `assert_tokens_contain!`, `assert_tokens_eq!`) per the
    ★★ TOKEN-STABILITY directive.
+6. **Adoption + economics** (`tatara-rust-survey`) — typed detectors find
+   hand-written impls that match a published derive; `survey-fleet-apply`
+   adopts them atomically (apply + inject dep + cargo gate + rollback on
+   red); `survey-fleet-returns` scores the fleet's diminishing-returns
+   economics and emits a `ContinueFarming`/`Plateau` verdict. See
+   [`docs/diminishing-returns.md`](./docs/diminishing-returns.md).
+7. **Self-documenting catalog** (`tatara-rust-docs`) — renders the
+   catalog into house-style docs (`docs/derives-reference.md`,
+   `docs/CLAUDE-derives-fragment.md`,
+   `skills/consume-pleme-derives/SKILL.md`) via `catalog-emit-docs`. A
+   drift guard (`tatara-rust-docs/tests/docs_in_sync.rs`) byte-compares
+   committed docs against a fresh render, so the docs cannot go stale.
 
 ## House rules — non-negotiable
 

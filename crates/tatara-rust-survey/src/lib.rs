@@ -34,6 +34,7 @@ pub mod cargo_deps;
 pub mod detector;
 pub mod fleet;
 pub mod pipeline;
+pub mod returns;
 pub use apply::{apply_to_source, ApplyError};
 pub use cargo_deps::{inject_deps, CargoDepsError, DepSource, InjectOutcome};
 pub use detector::{detectors, Detector};
@@ -45,6 +46,10 @@ pub use fleet::{
 pub use pipeline::{
     apply_all_to_source, survey_apply_validate, FileOutcome, PipelineError, PipelineOpts,
     PipelineOutcome,
+};
+pub use returns::{
+    fleet_returns, first_party_frontier_2026_06, Decision, FleetReturnsReport, FleetVerdict,
+    FrontierEstimate, LiftCostModel, PatternEconomics, Readiness,
 };
 
 /// One opportunity to replace a hand-written impl with a farm derive.

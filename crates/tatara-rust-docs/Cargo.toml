@@ -1,0 +1,20 @@
+[package]
+name        = "tatara-rust-docs"
+description = "Catalog → documentation emitter. Renders a MacroCatalogSpec into pleme-io house-style docs — a ./docs reference, a CLAUDE.md fragment, and a consume-the-derives SKILL.md — so the derive family's documentation is a generated artifact of the catalog, not a hand-maintained shadow that drifts."
+version      .workspace = true
+edition      .workspace = true
+rust-version .workspace = true
+license      .workspace = true
+repository   .workspace = true
+homepage     .workspace = true
+authors      .workspace = true
+
+[dependencies]
+tatara-rust-catalog .workspace = true
+
+[dev-dependencies]
+serde_json        .workspace = true
+tatara-rust-tlisp .workspace = true
+
+[lints]
+workspace = true

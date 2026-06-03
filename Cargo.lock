@@ -522,6 +522,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "tatara-rust-docs"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "tatara-rust-catalog",
+ "tatara-rust-tlisp",
+]
+
+[[package]]
 name = "tatara-rust-dsl"
 version = "0.1.0"
 dependencies = [
@@ -568,6 +577,7 @@ dependencies = [
  "tatara-rust-ast",
  "tatara-rust-catalog",
  "tatara-rust-derive",
+ "tatara-rust-docs",
  "tatara-rust-gate",
  "tatara-rust-macro-rules",
  "tatara-rust-proc-attr",

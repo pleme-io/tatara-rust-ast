@@ -40,9 +40,11 @@ use tatara_rust_publish::{
     PublishConfig, PublishOutcome, RepoPublishSpec, RepoVisibility, publish_all,
 };
 use tatara_rust_tlisp::{parse_macrocatalog, render_macrocatalog};
+use tatara_rust_docs::{render_docs, write_bundle};
 use tatara_rust_survey::{
-    apply_to_source, survey_apply_validate, survey_file, survey_fleet, survey_fleet_apply,
-    survey_fleet_validate, survey_tree, FleetApplyOpts, PipelineOpts,
+    apply_to_source, fleet_returns, first_party_frontier_2026_06, survey_apply_validate,
+    survey_file, survey_fleet, survey_fleet_apply, survey_fleet_validate, survey_tree,
+    FleetApplyOpts, FleetVerdict, LiftCostModel, PipelineOpts,
 };
 
 #[derive(Serialize, Deserialize)]
@@ -83,10 +85,12 @@ fn usage() -> ExitCode {
         tatara-rust-forge catalog-instantiate <catalog.json> --out <dir> [--repo-url-prefix <url>] [--skip-clippy] [--no-gate] [--publish --org <org>]\n  \
         tatara-rust-forge catalog-from-lisp <catalog.lisp> <out.json>   (parse defmacrocatalog → JSON)\n  \
         tatara-rust-forge catalog-to-lisp <catalog.json> <out.lisp>     (render JSON → defmacrocatalog)\n  \
+        tatara-rust-forge catalog-emit-docs <catalog.lisp|.json> --out <dir>  (generate house-style docs: ./docs reference + CLAUDE fragment + consume skill)\n  \
         tatara-rust-forge survey <crate-src-path> [--json]              (scan a Rust crate for derive-adoption candidates)\n  \
         tatara-rust-forge survey-apply <file.rs> [--write]              (apply the first candidate to a file; --write commits to disk)\n  \
         tatara-rust-forge survey-apply-all <crate-root> [--write] [--no-validate] [--skip-clippy] [--no-inject-deps] (whole-crate survey → apply → inject Cargo.toml deps → validate; rolls back on red gate)\n  \
         tatara-rust-forge survey-fleet <org-root> [--threshold N] [--json] (aggregate every crate under org-root; leaderboard sorted by candidate count)\n  \
+        tatara-rust-forge survey-fleet-returns <org-root> [--json] [--no-frontier] (diminishing-returns economics: per-pattern harvest/defer/stop + fleet ContinueFarming/Plateau verdict)\n  \
         tatara-rust-forge survey-fleet-apply <org-root> [--threshold N] [--write] [--no-validate] [--skip-clippy] [--no-inject-deps] [--no-stop-on-rollback] (bulk fleet adoption; per-crate atomic apply+gate+rollback)\n  \
         tatara-rust-forge survey-fleet-validate <org-root> [--json]    (substrate self-QA: apply every fleet candidate in-memory + verify re-parse; aggregate failures by class)"
     );
@@ -110,10 +114,12 @@ fn main() -> ExitCode {
         "catalog-instantiate" => cmd_catalog_instantiate(rest),
         "catalog-from-lisp" => cmd_catalog_from_lisp(rest),
         "catalog-to-lisp" => cmd_catalog_to_lisp(rest),
+        "catalog-emit-docs" => cmd_catalog_emit_docs(rest),
         "survey" => cmd_survey(rest),
         "survey-apply" => cmd_survey_apply(rest),
         "survey-apply-all" => cmd_survey_apply_all(rest),
         "survey-fleet" => cmd_survey_fleet(rest),
+        "survey-fleet-returns" => cmd_survey_fleet_returns(rest),
         "survey-fleet-apply" => cmd_survey_fleet_apply(rest),
         "survey-fleet-validate" => cmd_survey_fleet_validate(rest),
         "--help" | "-h" => {
@@ -714,6 +720,54 @@ fn cmd_catalog_to_lisp(args: &[String]) -> Result<String, String> {
 }
 
 // ─────────────────────────────────────────────────────────────────────
+// catalog-emit-docs — the catalog IS the docs source of truth
+// ─────────────────────────────────────────────────────────────────────
+
+fn cmd_catalog_emit_docs(args: &[String]) -> Result<String, String> {
+    if args.is_empty() {
+        return Err("catalog-emit-docs: needs <catalog.lisp|.json> --out <dir>".into());
+    }
+    let catalog_path = &args[0];
+    let mut out_dir: Option<PathBuf> = None;
+    let mut i = 1;
+    while i < args.len() {
+        if args[i] == "--out" {
+            i += 1;
+            out_dir = Some(PathBuf::from(args.get(i).ok_or("--out needs <dir>")?));
+        }
+        i += 1;
+    }
+    let out_dir = out_dir.ok_or("--out is required")?;
+
+    let src = std::fs::read_to_string(catalog_path)
+        .map_err(|e| format!("read {catalog_path}: {e}"))?;
+    // Lisp catalog → typed; JSON catalog → typed. Detect by extension.
+    let catalog: MacroCatalogSpec = if catalog_path.ends_with(".lisp") {
+        parse_macrocatalog(&src).map_err(|e| format!("parse {catalog_path}: {e}"))?
+    } else {
+        serde_json::from_str(&src).map_err(|e| format!("parse {catalog_path}: {e}"))?
+    };
+
+    let bundle = render_docs(&catalog);
+    let written = write_bundle(&bundle, &out_dir).map_err(|e| format!("write docs: {e}"))?;
+
+    println!("=== tatara-rust-forge catalog-emit-docs ===");
+    println!(
+        "Catalog: {} ({} entries)",
+        catalog.title,
+        catalog.entries.len()
+    );
+    for p in &written {
+        println!("  wrote {}", p.display());
+    }
+    Ok(format!(
+        "generated {} doc artifacts from {} catalog entries",
+        written.len(),
+        catalog.entries.len()
+    ))
+}
+
+// ─────────────────────────────────────────────────────────────────────
 // survey — find derive-adoption candidates in a Rust crate
 // ─────────────────────────────────────────────────────────────────────
 
@@ -1009,6 +1063,84 @@ fn cmd_survey_fleet(args: &[String]) -> Result<String, String> {
         threshold,
         report.total_candidates,
     ))
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// survey-fleet-returns — diminishing-returns economics + stop decision
+// ─────────────────────────────────────────────────────────────────────
+
+fn cmd_survey_fleet_returns(args: &[String]) -> Result<String, String> {
+    if args.is_empty() {
+        return Err("survey-fleet-returns: needs <org-root> [--json] [--no-frontier]".into());
+    }
+    let root = PathBuf::from(&args[0]);
+    let json = args.iter().any(|a| a == "--json");
+    let no_frontier = args.iter().any(|a| a == "--no-frontier");
+
+    let survey = survey_fleet(&root).map_err(|e| format!("fleet: {e}"))?;
+    let model = LiftCostModel::default();
+    let frontier = if no_frontier {
+        vec![]
+    } else {
+        first_party_frontier_2026_06()
+    };
+    let report = fleet_returns(&survey, &frontier, &model);
+
+    if json {
+        let s = serde_json::to_string_pretty(&report).map_err(|e| e.to_string())?;
+        println!("{s}");
+        return Ok(format!("verdict: {:?}", report.verdict));
+    }
+
+    println!("=== tatara-rust-forge survey-fleet-returns ===");
+    println!("Root: {}", root.display());
+    println!(
+        "Model: adopt={} detector={} emitter={} min_benefit={} min_roi={}",
+        model.adopt_cost, model.detector_cost, model.emitter_cost, model.min_benefit, model.min_roi,
+    );
+    println!();
+    println!(
+        "{:<16} {:<14} {:>5} {:>6} {:>5} {:>7}  {}",
+        "pattern", "readiness", "cand", "loc", "cost", "roi", "decision",
+    );
+    println!("{}", "─".repeat(76));
+    for p in &report.patterns {
+        println!(
+            "{:<16} {:<14} {:>5} {:>6} {:>5} {:>7.2}  {:?}",
+            p.pattern,
+            format!("{:?}", p.readiness),
+            p.candidates,
+            p.loc_saved,
+            p.lift_cost,
+            p.roi,
+            p.decision,
+        );
+    }
+    println!();
+    let dc = &report.decision_counts;
+    println!(
+        "Decisions: harvest={} defer={} stop={}",
+        dc.get("harvest").copied().unwrap_or(0),
+        dc.get("defer").copied().unwrap_or(0),
+        dc.get("stop").copied().unwrap_or(0),
+    );
+    println!(
+        "Harvestable now: ~{} LOC across {} pattern(s)",
+        report.total_harvestable_loc,
+        report.harvest().len(),
+    );
+    let verdict_line = match report.verdict {
+        FleetVerdict::ContinueFarming => {
+            "VERDICT: ContinueFarming — run `survey-fleet-apply` to harvest, then re-run this."
+        }
+        FleetVerdict::Plateau => {
+            "VERDICT: Plateau — refactoring has hit diminishing returns. Pivot to docs/codegen."
+        }
+    };
+    println!();
+    println!("{verdict_line}");
+
+    Ok(format!("verdict: {:?}", report.verdict))
 }
 
 // ─────────────────────────────────────────────────────────────────────

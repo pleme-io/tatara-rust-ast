@@ -27,6 +27,7 @@ members = [
   "crates/tatara-rust-verify",
   "crates/tatara-rust-publish",
   "crates/tatara-rust-survey",
+  "crates/tatara-rust-docs",
 ]
 
 [workspace.package]
@@ -61,6 +62,7 @@ tatara-rust-test        = { path = "crates/tatara-rust-test" }
 tatara-rust-snapshot    = { path = "crates/tatara-rust-snapshot" }
 tatara-rust-proptest    = { path = "crates/tatara-rust-proptest" }
 tatara-rust-repo        = { path = "crates/tatara-rust-repo" }
+tatara-rust-docs        = { path = "crates/tatara-rust-docs" }
 tatara-rust-gate        = { path = "crates/tatara-rust-gate" }
 tatara-rust-verify      = { path = "crates/tatara-rust-verify" }
 tatara-rust-publish     = { path = "crates/tatara-rust-publish" }

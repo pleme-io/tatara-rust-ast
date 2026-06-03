@@ -79,7 +79,18 @@ pub fn survey_fleet(root: &Path) -> Result<FleetSurveyReport, SurveyError> {
     for entry in std::fs::read_dir(root)? {
         let entry = entry?;
         let path = entry.path();
-        if !entry.file_type()?.is_dir() {
+        // `metadata` (unlike `file_type`) follows symlinks, so a
+        // symlinked crate dir resolves to its target's type. This makes
+        // a directory of symlinks a first-class scoped fleet root — the
+        // operator's way to survey "just my first-party libs" out of an
+        // 800-repo tree without touching vendored mirrors. Only the
+        // immediate children are followed, so each crate is surveyed
+        // exactly once (no symlink-cycle risk). Unreadable/broken
+        // entries are skipped, matching the rest of the walker.
+        let Ok(meta) = std::fs::metadata(&path) else {
+            continue;
+        };
+        if !meta.is_dir() {
             continue;
         }
         let name = entry.file_name();
@@ -538,6 +549,25 @@ pub fn noop() {}
                 .any(|e| e.crate_path.ends_with("gamma")),
             "empty crate must not appear in leaderboard"
         );
+    }
+
+    #[test]
+    fn fleet_follows_symlinked_crate_roots() {
+        // A scoped fleet root = a directory of symlinks to real crates
+        // elsewhere. The walker must resolve them (the operator's way to
+        // survey first-party libs out of a tree full of vendored mirrors).
+        let real = tmp_org("symlink-real", &[("alpha", GETTER_BODY)]);
+        let scoped = std::env::temp_dir().join(format!(
+            "tatara-fleet-scoped-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&scoped);
+        std::fs::create_dir_all(&scoped).unwrap();
+        std::os::unix::fs::symlink(real.join("alpha"), scoped.join("alpha")).unwrap();
+
+        let report = survey_fleet(&scoped).unwrap();
+        assert_eq!(report.crates_scanned, 1, "symlinked crate dir must be followed");
+        assert_eq!(report.crates_with_candidates, 1);
     }
 
     #[test]
