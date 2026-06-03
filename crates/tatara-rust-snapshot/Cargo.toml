@@ -16,8 +16,8 @@ proc-macro2     .workspace = true
 thiserror       .workspace = true
 
 [dev-dependencies]
-tatara-rust-derive   .workspace = true
-tatara-rust-examples .workspace = true
+tatara-rust-derive = { path = "../tatara-rust-derive" }
+tatara-rust-examples = { path = "../tatara-rust-examples" }
 
 [lints]
 workspace = true

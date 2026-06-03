@@ -22,7 +22,7 @@ prettyplease         .workspace = true
 toml                 .workspace = true
 
 [dev-dependencies]
-tatara-rust-snapshot .workspace = true
+tatara-rust-snapshot = { path = "../tatara-rust-snapshot" }
 
 [lints]
 workspace = true

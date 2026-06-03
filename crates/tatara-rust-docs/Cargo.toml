@@ -14,7 +14,7 @@ tatara-rust-catalog .workspace = true
 
 [dev-dependencies]
 serde_json        .workspace = true
-tatara-rust-tlisp .workspace = true
+tatara-rust-tlisp = { path = "../tatara-rust-tlisp" }
 
 [lints]
 workspace = true

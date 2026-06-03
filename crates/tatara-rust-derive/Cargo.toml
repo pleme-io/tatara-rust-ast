@@ -24,8 +24,8 @@ toml            .workspace = true
 [dev-dependencies]
 insta                .workspace = true
 proptest             .workspace = true
-tatara-rust-snapshot .workspace = true
-tatara-rust-examples .workspace = true
+tatara-rust-snapshot = { path = "../tatara-rust-snapshot" }
+tatara-rust-examples = { path = "../tatara-rust-examples" }
 
 [lints]
 workspace = true

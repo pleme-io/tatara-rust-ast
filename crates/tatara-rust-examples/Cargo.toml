@@ -16,7 +16,7 @@ tatara-rust-suite  .workspace = true
 
 [dev-dependencies]
 serde_json           .workspace = true
-tatara-rust-snapshot .workspace = true
+tatara-rust-snapshot = { path = "../tatara-rust-snapshot" }
 
 [lints]
 workspace = true
