@@ -27,13 +27,6 @@ on:
   schedule:
     - cron: "*/15 * * * *"
 
-# Entry-level serialization (GitHub honors the entry workflow's concurrency):
-# a */15 drip tick must queue behind — never race — a still-running push ship
-# that's riding the rate limit, so they don't both spend new-crate tokens.
-concurrency:
-  group: auto-release-${{ github.repository }}
-  cancel-in-progress: false
-
 jobs:
   release:
     # The reusable workflow gates on github.event_name: push/dispatch = full
