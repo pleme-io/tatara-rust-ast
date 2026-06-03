@@ -41,32 +41,32 @@ authors       = ["pleme-io"]
 
 [workspace.dependencies]
 # Sibling crates
-tatara-rust-ast         = { path = "crates/tatara-rust-ast" }
-tatara-rust-emit        = { path = "crates/tatara-rust-emit" }
-tatara-rust-parse       = { path = "crates/tatara-rust-parse" }
-tatara-rust-derive      = { path = "crates/tatara-rust-derive" }
-tatara-rust-proc-attr   = { path = "crates/tatara-rust-proc-attr" }
-tatara-rust-proc-fn     = { path = "crates/tatara-rust-proc-fn" }
-tatara-rust-macro-rules = { path = "crates/tatara-rust-macro-rules" }
-tatara-rust-suite       = { path = "crates/tatara-rust-suite" }
-tatara-rust-tlisp       = { path = "crates/tatara-rust-tlisp" }
-tatara-rust-composite   = { path = "crates/tatara-rust-composite" }
-tatara-rust-dsl         = { path = "crates/tatara-rust-dsl" }
-tatara-rust-flake       = { path = "crates/tatara-rust-flake" }
-tatara-rust-caixa       = { path = "crates/tatara-rust-caixa" }
-tatara-rust-validate    = { path = "crates/tatara-rust-validate" }
-tatara-rust-catalog     = { path = "crates/tatara-rust-catalog" }
-tatara-rust-attr        = { path = "crates/tatara-rust-attr" }
-tatara-rust-examples    = { path = "crates/tatara-rust-examples" }
-tatara-rust-test        = { path = "crates/tatara-rust-test" }
-tatara-rust-snapshot    = { path = "crates/tatara-rust-snapshot" }
-tatara-rust-proptest    = { path = "crates/tatara-rust-proptest" }
-tatara-rust-repo        = { path = "crates/tatara-rust-repo" }
-tatara-rust-docs        = { path = "crates/tatara-rust-docs" }
-tatara-rust-gate        = { path = "crates/tatara-rust-gate" }
-tatara-rust-verify      = { path = "crates/tatara-rust-verify" }
-tatara-rust-publish     = { path = "crates/tatara-rust-publish" }
-tatara-rust-survey      = { path = "crates/tatara-rust-survey" }
+tatara-rust-ast         = { path = "crates/tatara-rust-ast", version = "0.1" }
+tatara-rust-emit        = { path = "crates/tatara-rust-emit", version = "0.1" }
+tatara-rust-parse       = { path = "crates/tatara-rust-parse", version = "0.1" }
+tatara-rust-derive      = { path = "crates/tatara-rust-derive", version = "0.1" }
+tatara-rust-proc-attr   = { path = "crates/tatara-rust-proc-attr", version = "0.1" }
+tatara-rust-proc-fn     = { path = "crates/tatara-rust-proc-fn", version = "0.1" }
+tatara-rust-macro-rules = { path = "crates/tatara-rust-macro-rules", version = "0.1" }
+tatara-rust-suite       = { path = "crates/tatara-rust-suite", version = "0.1" }
+tatara-rust-tlisp       = { path = "crates/tatara-rust-tlisp", version = "0.1" }
+tatara-rust-composite   = { path = "crates/tatara-rust-composite", version = "0.1" }
+tatara-rust-dsl         = { path = "crates/tatara-rust-dsl", version = "0.1" }
+tatara-rust-flake       = { path = "crates/tatara-rust-flake", version = "0.1" }
+tatara-rust-caixa       = { path = "crates/tatara-rust-caixa", version = "0.1" }
+tatara-rust-validate    = { path = "crates/tatara-rust-validate", version = "0.1" }
+tatara-rust-catalog     = { path = "crates/tatara-rust-catalog", version = "0.1" }
+tatara-rust-attr        = { path = "crates/tatara-rust-attr", version = "0.1" }
+tatara-rust-examples    = { path = "crates/tatara-rust-examples", version = "0.1" }
+tatara-rust-test        = { path = "crates/tatara-rust-test", version = "0.1" }
+tatara-rust-snapshot    = { path = "crates/tatara-rust-snapshot", version = "0.1" }
+tatara-rust-proptest    = { path = "crates/tatara-rust-proptest", version = "0.1" }
+tatara-rust-repo        = { path = "crates/tatara-rust-repo", version = "0.1" }
+tatara-rust-docs        = { path = "crates/tatara-rust-docs", version = "0.1" }
+tatara-rust-gate        = { path = "crates/tatara-rust-gate", version = "0.1" }
+tatara-rust-verify      = { path = "crates/tatara-rust-verify", version = "0.1" }
+tatara-rust-publish     = { path = "crates/tatara-rust-publish", version = "0.1" }
+tatara-rust-survey      = { path = "crates/tatara-rust-survey", version = "0.1" }
 
 # pleme-io tatara stack
 tatara-lisp        = { git = "https://github.com/pleme-io/tatara-lisp" }
