@@ -18,6 +18,21 @@ on:
         description: "patch | minor | major"
         required: false
         default: patch
+  # Drip the new-crate bootstrap: a push (full mode) ships the burst +
+  # rides ~30m of refills, then this */15 cron tick (drip mode) publishes
+  # whatever capacity has refilled, idempotently, until every member is on
+  # crates.io. ~15m sits just above crates.io's new-crate refill so no
+  # capacity is left on the table; once converged each tick is a few
+  # already-published HEADs and exits in seconds (negligible cost).
+  schedule:
+    - cron: "*/15 * * * *"
+
+# Entry-level serialization (GitHub honors the entry workflow's concurrency):
+# a */15 drip tick must queue behind — never race — a still-running push ship
+# that's riding the rate limit, so they don't both spend new-crate tokens.
+concurrency:
+  group: auto-release-${{ github.repository }}
+  cancel-in-progress: false
 
 jobs:
   release:
@@ -26,4 +41,6 @@ jobs:
       bump-type: ${{ inputs.bump-type || 'patch' }}
       source-paths: "Cargo.toml Cargo.lock crates"
       add-paths: "Cargo.toml Cargo.lock crates"
+      # Push/dispatch = full bump+ship; cron = publish-only capacity drip.
+      publish-mode: ${{ github.event_name == 'schedule' && 'drip' || 'full' }}
     secrets: inherit
