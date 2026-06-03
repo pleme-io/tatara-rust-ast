@@ -36,11 +36,12 @@ concurrency:
 
 jobs:
   release:
+    # The reusable workflow gates on github.event_name: push/dispatch = full
+    # bump+ship (rides the rate limit in-job); the */15 schedule = publish-only
+    # capacity drip. Nothing to pass here — it reads the triggering event.
     uses: pleme-io/substrate/.github/workflows/rust-auto-release.yml@main
     with:
       bump-type: ${{ inputs.bump-type || 'patch' }}
       source-paths: "Cargo.toml Cargo.lock crates"
       add-paths: "Cargo.toml Cargo.lock crates"
-      # Push/dispatch = full bump+ship; cron = publish-only capacity drip.
-      publish-mode: ${{ github.event_name == 'schedule' && 'drip' || 'full' }}
     secrets: inherit
