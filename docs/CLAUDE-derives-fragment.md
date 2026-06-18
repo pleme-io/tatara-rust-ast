@@ -4,7 +4,7 @@
 ## Derive family (★★ EMITTER SUBSTRATE)
 
 > **★★ EMITTER SUBSTRATE.** Every repeating impl is a spec; emit, don't
-> author. The 28 derives below are published proc-macro crates emitted
+> author. The 30 derives below are published proc-macro crates emitted
 > from `catalogs/pleme-derives.lisp`. Need a new mechanical impl shape?
 > Add a catalog entry and run `catalog-instantiate` — do not hand-write
 > the proc-macro, and do not hand-write the impl blocks it would replace.
@@ -29,10 +29,12 @@
 | `pleme-deref-derive` | `#[derive(DerefNewtype)]` | newtype | 0.1.0 | Newtype Deref: impl Deref for Wrapper with Target = Inner. |
 | `pleme-derefmut-derive` | `#[derive(DerefMutNewtype)]` | newtype | 0.1.0 | Newtype DerefMut: impl ::std::ops::DerefMut for Wrapper. Pairs with DerefNewtype to enable &mut Inner via auto-deref. |
 | `pleme-display-derive` | `#[derive(DisplayNewtype)]` | newtype | 0.1.0 | Newtype Display: impl ::std::fmt::Display for Wrapper, delegating to the inner value's Display. Eliminates the boilerplate of wrapper.0.fmt(f). |
+| `pleme-fromstrnewtype-derive` | `#[derive(FromStrNewtype)]` | newtype | 0.1.0 | Newtype FromStr: impl ::std::str::FromStr for Wrapper where Inner: FromStr, delegating to the inner value's parse and forwarding its Err. The parse-side dual of DisplayNewtype — pairs with it so a typed string/ID wrapper (e.g. struct Email(String), struct Port(u16)) gets both `{}` formatting and `"...".parse::<Wrapper>()` for free. Mirrors DefaultNewtype's where-bound + UFCS delegation; no format!() in emitted code. |
 | `pleme-implfrom-derive` | `#[derive(ImplFrom)]` | newtype | 0.1.0 | Newtype-bidirectional From: impl From<Inner> for Wrapper + From<Wrapper> for Inner. |
 | `pleme-inner-derive` | `#[derive(InnerNewtype)]` | newtype | 0.1.0 | Newtype accessors: inner() + into_inner(). |
 | `pleme-allvariants-derive` | `#[derive(AllVariants)]` | enum-fold | 0.1.0 | Enum-fold: pub const ALL: &'static [Self] = &[Self::A, Self::B, ...] + pub const fn all(). Unit-variant enums only. |
 | `pleme-variantcount-derive` | `#[derive(VariantCount)]` | enum-fold | 0.1.0 | Enum-fold: pub const COUNT: usize = N + pub const fn count(). Any variant shape. |
+| `pleme-variantdisplay-derive` | `#[derive(VariantDisplay)]` | enum-fold | 0.1.0 | Enum-fold: impl ::std::fmt::Display for the enum, matching each unit variant to its bare name written via f.write_str. The Display dual of VariantStr (which gives as_str) — pairs with it so an enum gets both as_str() and a name-based {} format for free, with zero hand-written match. Unit-variant enums only; the match is exhaustive (no wildcard). No format!() in emitted code (write_str only), so it is clean under the consumer's TYPED-EMISSION format-ban. |
 | `pleme-variantnames-derive` | `#[derive(VariantNames)]` | enum-fold | 0.1.0 | Enum-fold: pub const NAMES: &'static [&'static str] = &[...] + pub const fn names(). Any variant shape. |
 | `pleme-variantstr-derive` | `#[derive(VariantStr)]` | enum-fold | 0.1.0 | Enum-fold: pub fn as_str(&self) -> &'static str { match self { Self::A => "A", ... } }. Maps each unit variant to its bare name as a static string. Unit-variant enums only. |
 | `pleme-closedaxis-derive` | `#[derive(ClosedAxis)]` | closed-axis | 0.1.0 | allvariants targeting the shikumi ClosedAxis trait: for a unit enum, emits the inherent pub const ALL: &'static [Self] PLUS impl shikumi::ClosedAxis for Self bound to the same slice, so the enum plugs straight into shikumi::axis_iter / axis_cardinality / ProductCube with zero hand-written ALL. Delegates emission to the proven EnumFold emitter (no duplicated emission path). Consumer enum must derive Copy + Eq + Hash for the trait bound. |

@@ -266,6 +266,18 @@
         :impl-template "impl ::std::default::Default for #self_name where #inner_ty: ::std::default::Default { fn default() -> Self { Self(<#inner_ty as ::std::default::Default>::default()) } }"
       ))
     (
+      :crate-name "pleme-fromstrnewtype-derive"
+      :description "Newtype FromStr: impl ::std::str::FromStr for Wrapper where Inner: FromStr, delegating to the inner value's parse and forwarding its Err. The parse-side dual of DisplayNewtype — pairs with it so a typed string/ID wrapper (e.g. struct Email(String), struct Port(u16)) gets both `{}` formatting and `\"...\".parse::<Wrapper>()` for free. Mirrors DefaultNewtype's where-bound + UFCS delegation; no format!() in emitted code."
+      :since "0.1.0"
+      :owner "pleme-io"
+      :verifier-hint newtype-default
+      :kind newtype
+      :spec (
+        :trait-name "FromStrNewtype"
+        :target tuple
+        :impl-template "impl ::std::str::FromStr for #self_name where #inner_ty: ::std::str::FromStr { type Err = <#inner_ty as ::std::str::FromStr>::Err; fn from_str(s: &str) -> ::std::result::Result<Self, Self::Err> { ::std::result::Result::Ok(Self(<#inner_ty as ::std::str::FromStr>::from_str(s)?)) } }"
+      ))
+    (
       :crate-name "pleme-variantstr-derive"
       :description "Enum-fold: pub fn as_str(&self) -> &'static str { match self { Self::A => \"A\", ... } }. Maps each unit variant to its bare name as a static string. Unit-variant enums only."
       :since "0.1.0"
@@ -343,6 +355,19 @@
       :spec (
         :matrix-macro "verification_matrix"
         :covers-macro "matrix_covers_all"
+      ))
+    (
+      :crate-name "pleme-variantdisplay-derive"
+      :description "Enum-fold: impl ::std::fmt::Display for the enum, matching each unit variant to its bare name written via f.write_str. The Display dual of VariantStr (which gives as_str) — pairs with it so an enum gets both as_str() and a name-based {} format for free, with zero hand-written match. Unit-variant enums only; the match is exhaustive (no wildcard). No format!() in emitted code (write_str only), so it is clean under the consumer's TYPED-EMISSION format-ban."
+      :since "0.1.0"
+      :owner "pleme-io"
+      :verifier-hint enum-fold-variant-str
+      :kind enum-fold
+      :spec (
+        :trait-name "VariantDisplay"
+        :target unit-variants-only
+        :per-variant-fragment "Self::#variant_name => f.write_str(#variant_str)"
+        :fold-template "impl ::std::fmt::Display for #self_name { fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result { match self { #fold } } }"
       ))
     (
       :crate-name "pleme-closedaxis-derive"
