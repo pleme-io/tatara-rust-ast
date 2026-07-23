@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "cargo_lock_sha256": "7500a1e6063f94fa085a78b93fcfb08694385c11d2655f0cac7abcef9b4dc88a",
+  "cargo_lock_sha256": "80faaa69b92ab9ef35d3bbe295426d3a772188234747ed4a71761a4f6290bfcb",
   "target_resolves": {
     "base": {
       "autocfg-1.5.1": {
@@ -1063,7 +1063,7 @@
           "visit-mut"
         ]
       },
-      "tatara-rust-ast-0.1.4": {
+      "tatara-rust-ast-0.1.5": {
         "runtime_dependencies": [
           {
             "name": "indexmap",
@@ -1148,7 +1148,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-rust-attr-0.1.4": {
+      "tatara-rust-attr-0.1.5": {
         "runtime_dependencies": [
           {
             "name": "serde",
@@ -1174,7 +1174,7 @@
           },
           {
             "name": "tatara_rust_ast",
-            "package_key": "tatara-rust-ast-0.1.4",
+            "package_key": "tatara-rust-ast-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -1196,11 +1196,11 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-rust-caixa-0.1.4": {
+      "tatara-rust-caixa-0.1.5": {
         "runtime_dependencies": [
           {
             "name": "tatara_rust_ast",
-            "package_key": "tatara-rust-ast-0.1.4",
+            "package_key": "tatara-rust-ast-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -1212,7 +1212,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-rust-catalog-0.1.4": {
+      "tatara-rust-catalog-0.1.5": {
         "runtime_dependencies": [
           {
             "name": "serde",
@@ -1238,7 +1238,7 @@
           },
           {
             "name": "tatara_rust_ast",
-            "package_key": "tatara-rust-ast-0.1.4",
+            "package_key": "tatara-rust-ast-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -1248,7 +1248,7 @@
           },
           {
             "name": "tatara_rust_composite",
-            "package_key": "tatara-rust-composite-0.1.4",
+            "package_key": "tatara-rust-composite-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -1258,7 +1258,7 @@
           },
           {
             "name": "tatara_rust_derive",
-            "package_key": "tatara-rust-derive-0.1.4",
+            "package_key": "tatara-rust-derive-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -1268,7 +1268,7 @@
           },
           {
             "name": "tatara_rust_macro_rules",
-            "package_key": "tatara-rust-macro-rules-0.1.4",
+            "package_key": "tatara-rust-macro-rules-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -1278,7 +1278,7 @@
           },
           {
             "name": "tatara_rust_proc_attr",
-            "package_key": "tatara-rust-proc-attr-0.1.4",
+            "package_key": "tatara-rust-proc-attr-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -1288,7 +1288,7 @@
           },
           {
             "name": "tatara_rust_proc_fn",
-            "package_key": "tatara-rust-proc-fn-0.1.4",
+            "package_key": "tatara-rust-proc-fn-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -1298,7 +1298,7 @@
           },
           {
             "name": "tatara_rust_repo",
-            "package_key": "tatara-rust-repo-0.1.4",
+            "package_key": "tatara-rust-repo-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -1308,7 +1308,7 @@
           },
           {
             "name": "tatara_rust_suite",
-            "package_key": "tatara-rust-suite-0.1.4",
+            "package_key": "tatara-rust-suite-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -1318,7 +1318,7 @@
           },
           {
             "name": "tatara_rust_validate",
-            "package_key": "tatara-rust-validate-0.1.4",
+            "package_key": "tatara-rust-validate-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -1340,7 +1340,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-rust-composite-0.1.4": {
+      "tatara-rust-composite-0.1.5": {
         "runtime_dependencies": [
           {
             "name": "serde",
@@ -1366,7 +1366,7 @@
           },
           {
             "name": "tatara_rust_ast",
-            "package_key": "tatara-rust-ast-0.1.4",
+            "package_key": "tatara-rust-ast-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -1376,7 +1376,7 @@
           },
           {
             "name": "tatara_rust_derive",
-            "package_key": "tatara-rust-derive-0.1.4",
+            "package_key": "tatara-rust-derive-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -1398,7 +1398,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-rust-derive-0.1.4": {
+      "tatara-rust-derive-0.1.5": {
         "runtime_dependencies": [
           {
             "name": "indexmap",
@@ -1481,7 +1481,7 @@
           },
           {
             "name": "tatara_rust_ast",
-            "package_key": "tatara-rust-ast-0.1.4",
+            "package_key": "tatara-rust-ast-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -1513,11 +1513,11 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-rust-docs-0.1.4": {
+      "tatara-rust-docs-0.1.5": {
         "runtime_dependencies": [
           {
             "name": "tatara_rust_catalog",
-            "package_key": "tatara-rust-catalog-0.1.4",
+            "package_key": "tatara-rust-catalog-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -1529,11 +1529,11 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-rust-dsl-0.1.4": {
+      "tatara-rust-dsl-0.1.5": {
         "runtime_dependencies": [
           {
             "name": "tatara_rust_ast",
-            "package_key": "tatara-rust-ast-0.1.4",
+            "package_key": "tatara-rust-ast-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -1543,7 +1543,7 @@
           },
           {
             "name": "tatara_rust_derive",
-            "package_key": "tatara-rust-derive-0.1.4",
+            "package_key": "tatara-rust-derive-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -1555,7 +1555,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-rust-emit-0.1.4": {
+      "tatara-rust-emit-0.1.5": {
         "runtime_dependencies": [
           {
             "name": "prettyplease",
@@ -1604,7 +1604,7 @@
           },
           {
             "name": "tatara_rust_ast",
-            "package_key": "tatara-rust-ast-0.1.4",
+            "package_key": "tatara-rust-ast-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -1626,11 +1626,11 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-rust-examples-0.1.4": {
+      "tatara-rust-examples-0.1.5": {
         "runtime_dependencies": [
           {
             "name": "tatara_rust_ast",
-            "package_key": "tatara-rust-ast-0.1.4",
+            "package_key": "tatara-rust-ast-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -1640,7 +1640,7 @@
           },
           {
             "name": "tatara_rust_derive",
-            "package_key": "tatara-rust-derive-0.1.4",
+            "package_key": "tatara-rust-derive-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -1650,7 +1650,7 @@
           },
           {
             "name": "tatara_rust_suite",
-            "package_key": "tatara-rust-suite-0.1.4",
+            "package_key": "tatara-rust-suite-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -1662,11 +1662,11 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-rust-flake-0.1.4": {
+      "tatara-rust-flake-0.1.5": {
         "runtime_dependencies": [
           {
             "name": "tatara_rust_ast",
-            "package_key": "tatara-rust-ast-0.1.4",
+            "package_key": "tatara-rust-ast-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -1678,7 +1678,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-rust-forge-0.1.4": {
+      "tatara-rust-forge-0.1.5": {
         "runtime_dependencies": [
           {
             "name": "serde",
@@ -1704,7 +1704,7 @@
           },
           {
             "name": "tatara_rust_ast",
-            "package_key": "tatara-rust-ast-0.1.4",
+            "package_key": "tatara-rust-ast-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -1714,7 +1714,7 @@
           },
           {
             "name": "tatara_rust_catalog",
-            "package_key": "tatara-rust-catalog-0.1.4",
+            "package_key": "tatara-rust-catalog-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -1724,7 +1724,7 @@
           },
           {
             "name": "tatara_rust_derive",
-            "package_key": "tatara-rust-derive-0.1.4",
+            "package_key": "tatara-rust-derive-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -1734,7 +1734,7 @@
           },
           {
             "name": "tatara_rust_docs",
-            "package_key": "tatara-rust-docs-0.1.4",
+            "package_key": "tatara-rust-docs-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -1744,7 +1744,7 @@
           },
           {
             "name": "tatara_rust_gate",
-            "package_key": "tatara-rust-gate-0.1.4",
+            "package_key": "tatara-rust-gate-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -1754,7 +1754,7 @@
           },
           {
             "name": "tatara_rust_macro_rules",
-            "package_key": "tatara-rust-macro-rules-0.1.4",
+            "package_key": "tatara-rust-macro-rules-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -1764,7 +1764,7 @@
           },
           {
             "name": "tatara_rust_proc_attr",
-            "package_key": "tatara-rust-proc-attr-0.1.4",
+            "package_key": "tatara-rust-proc-attr-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -1774,7 +1774,7 @@
           },
           {
             "name": "tatara_rust_proc_fn",
-            "package_key": "tatara-rust-proc-fn-0.1.4",
+            "package_key": "tatara-rust-proc-fn-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -1784,7 +1784,7 @@
           },
           {
             "name": "tatara_rust_publish",
-            "package_key": "tatara-rust-publish-0.1.4",
+            "package_key": "tatara-rust-publish-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -1794,7 +1794,7 @@
           },
           {
             "name": "tatara_rust_repo",
-            "package_key": "tatara-rust-repo-0.1.4",
+            "package_key": "tatara-rust-repo-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -1804,7 +1804,7 @@
           },
           {
             "name": "tatara_rust_suite",
-            "package_key": "tatara-rust-suite-0.1.4",
+            "package_key": "tatara-rust-suite-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -1814,7 +1814,7 @@
           },
           {
             "name": "tatara_rust_survey",
-            "package_key": "tatara-rust-survey-0.1.4",
+            "package_key": "tatara-rust-survey-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -1824,7 +1824,7 @@
           },
           {
             "name": "tatara_rust_tlisp",
-            "package_key": "tatara-rust-tlisp-0.1.4",
+            "package_key": "tatara-rust-tlisp-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -1834,7 +1834,7 @@
           },
           {
             "name": "tatara_rust_validate",
-            "package_key": "tatara-rust-validate-0.1.4",
+            "package_key": "tatara-rust-validate-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -1844,7 +1844,7 @@
           },
           {
             "name": "tatara_rust_verify",
-            "package_key": "tatara-rust-verify-0.1.4",
+            "package_key": "tatara-rust-verify-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -1866,7 +1866,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-rust-gate-0.1.4": {
+      "tatara-rust-gate-0.1.5": {
         "runtime_dependencies": [
           {
             "name": "serde",
@@ -1894,7 +1894,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-rust-macro-rules-0.1.4": {
+      "tatara-rust-macro-rules-0.1.5": {
         "runtime_dependencies": [
           {
             "name": "serde",
@@ -1920,7 +1920,7 @@
           },
           {
             "name": "tatara_rust_ast",
-            "package_key": "tatara-rust-ast-0.1.4",
+            "package_key": "tatara-rust-ast-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -1942,7 +1942,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-rust-parse-0.1.4": {
+      "tatara-rust-parse-0.1.5": {
         "runtime_dependencies": [
           {
             "name": "proc_macro2",
@@ -1971,7 +1971,7 @@
           },
           {
             "name": "tatara_rust_ast",
-            "package_key": "tatara-rust-ast-0.1.4",
+            "package_key": "tatara-rust-ast-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -1983,7 +1983,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-rust-proc-attr-0.1.4": {
+      "tatara-rust-proc-attr-0.1.5": {
         "runtime_dependencies": [
           {
             "name": "serde",
@@ -2009,7 +2009,7 @@
           },
           {
             "name": "tatara_rust_ast",
-            "package_key": "tatara-rust-ast-0.1.4",
+            "package_key": "tatara-rust-ast-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -2031,7 +2031,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-rust-proc-fn-0.1.4": {
+      "tatara-rust-proc-fn-0.1.5": {
         "runtime_dependencies": [
           {
             "name": "serde",
@@ -2057,7 +2057,7 @@
           },
           {
             "name": "tatara_rust_ast",
-            "package_key": "tatara-rust-ast-0.1.4",
+            "package_key": "tatara-rust-ast-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -2079,7 +2079,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-rust-proptest-0.1.4": {
+      "tatara-rust-proptest-0.1.5": {
         "runtime_dependencies": [
           {
             "name": "proptest",
@@ -2093,7 +2093,7 @@
           },
           {
             "name": "tatara_rust_ast",
-            "package_key": "tatara-rust-ast-0.1.4",
+            "package_key": "tatara-rust-ast-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -2103,7 +2103,7 @@
           },
           {
             "name": "tatara_rust_derive",
-            "package_key": "tatara-rust-derive-0.1.4",
+            "package_key": "tatara-rust-derive-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -2113,7 +2113,7 @@
           },
           {
             "name": "tatara_rust_validate",
-            "package_key": "tatara-rust-validate-0.1.4",
+            "package_key": "tatara-rust-validate-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -2125,7 +2125,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-rust-publish-0.1.4": {
+      "tatara-rust-publish-0.1.5": {
         "runtime_dependencies": [
           {
             "name": "serde",
@@ -2153,7 +2153,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-rust-repo-0.1.4": {
+      "tatara-rust-repo-0.1.5": {
         "runtime_dependencies": [
           {
             "name": "serde",
@@ -2169,7 +2169,7 @@
           },
           {
             "name": "tatara_rust_ast",
-            "package_key": "tatara-rust-ast-0.1.4",
+            "package_key": "tatara-rust-ast-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -2179,7 +2179,7 @@
           },
           {
             "name": "tatara_rust_caixa",
-            "package_key": "tatara-rust-caixa-0.1.4",
+            "package_key": "tatara-rust-caixa-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -2189,7 +2189,7 @@
           },
           {
             "name": "tatara_rust_flake",
-            "package_key": "tatara-rust-flake-0.1.4",
+            "package_key": "tatara-rust-flake-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -2201,7 +2201,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-rust-snapshot-0.1.4": {
+      "tatara-rust-snapshot-0.1.5": {
         "runtime_dependencies": [
           {
             "name": "insta",
@@ -2227,7 +2227,7 @@
           },
           {
             "name": "tatara_rust_ast",
-            "package_key": "tatara-rust-ast-0.1.4",
+            "package_key": "tatara-rust-ast-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -2249,7 +2249,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-rust-suite-0.1.4": {
+      "tatara-rust-suite-0.1.5": {
         "runtime_dependencies": [
           {
             "name": "serde",
@@ -2275,7 +2275,7 @@
           },
           {
             "name": "tatara_rust_ast",
-            "package_key": "tatara-rust-ast-0.1.4",
+            "package_key": "tatara-rust-ast-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -2285,7 +2285,7 @@
           },
           {
             "name": "tatara_rust_derive",
-            "package_key": "tatara-rust-derive-0.1.4",
+            "package_key": "tatara-rust-derive-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -2295,7 +2295,7 @@
           },
           {
             "name": "tatara_rust_macro_rules",
-            "package_key": "tatara-rust-macro-rules-0.1.4",
+            "package_key": "tatara-rust-macro-rules-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -2305,7 +2305,7 @@
           },
           {
             "name": "tatara_rust_proc_attr",
-            "package_key": "tatara-rust-proc-attr-0.1.4",
+            "package_key": "tatara-rust-proc-attr-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -2315,7 +2315,7 @@
           },
           {
             "name": "tatara_rust_proc_fn",
-            "package_key": "tatara-rust-proc-fn-0.1.4",
+            "package_key": "tatara-rust-proc-fn-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -2337,7 +2337,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-rust-survey-0.1.4": {
+      "tatara-rust-survey-0.1.5": {
         "runtime_dependencies": [
           {
             "name": "prettyplease",
@@ -2400,7 +2400,7 @@
           },
           {
             "name": "tatara_rust_gate",
-            "package_key": "tatara-rust-gate-0.1.4",
+            "package_key": "tatara-rust-gate-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -2432,11 +2432,11 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-rust-test-0.1.4": {
+      "tatara-rust-test-0.1.5": {
         "runtime_dependencies": [
           {
             "name": "tatara_rust_ast",
-            "package_key": "tatara-rust-ast-0.1.4",
+            "package_key": "tatara-rust-ast-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -2446,7 +2446,7 @@
           },
           {
             "name": "tatara_rust_attr",
-            "package_key": "tatara-rust-attr-0.1.4",
+            "package_key": "tatara-rust-attr-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -2456,7 +2456,7 @@
           },
           {
             "name": "tatara_rust_caixa",
-            "package_key": "tatara-rust-caixa-0.1.4",
+            "package_key": "tatara-rust-caixa-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -2466,7 +2466,7 @@
           },
           {
             "name": "tatara_rust_catalog",
-            "package_key": "tatara-rust-catalog-0.1.4",
+            "package_key": "tatara-rust-catalog-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -2476,7 +2476,7 @@
           },
           {
             "name": "tatara_rust_composite",
-            "package_key": "tatara-rust-composite-0.1.4",
+            "package_key": "tatara-rust-composite-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -2486,7 +2486,7 @@
           },
           {
             "name": "tatara_rust_derive",
-            "package_key": "tatara-rust-derive-0.1.4",
+            "package_key": "tatara-rust-derive-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -2496,7 +2496,7 @@
           },
           {
             "name": "tatara_rust_dsl",
-            "package_key": "tatara-rust-dsl-0.1.4",
+            "package_key": "tatara-rust-dsl-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -2506,7 +2506,7 @@
           },
           {
             "name": "tatara_rust_examples",
-            "package_key": "tatara-rust-examples-0.1.4",
+            "package_key": "tatara-rust-examples-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -2516,7 +2516,7 @@
           },
           {
             "name": "tatara_rust_flake",
-            "package_key": "tatara-rust-flake-0.1.4",
+            "package_key": "tatara-rust-flake-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -2526,7 +2526,7 @@
           },
           {
             "name": "tatara_rust_macro_rules",
-            "package_key": "tatara-rust-macro-rules-0.1.4",
+            "package_key": "tatara-rust-macro-rules-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -2536,7 +2536,7 @@
           },
           {
             "name": "tatara_rust_proc_attr",
-            "package_key": "tatara-rust-proc-attr-0.1.4",
+            "package_key": "tatara-rust-proc-attr-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -2546,7 +2546,7 @@
           },
           {
             "name": "tatara_rust_proc_fn",
-            "package_key": "tatara-rust-proc-fn-0.1.4",
+            "package_key": "tatara-rust-proc-fn-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -2556,7 +2556,7 @@
           },
           {
             "name": "tatara_rust_suite",
-            "package_key": "tatara-rust-suite-0.1.4",
+            "package_key": "tatara-rust-suite-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -2566,7 +2566,7 @@
           },
           {
             "name": "tatara_rust_validate",
-            "package_key": "tatara-rust-validate-0.1.4",
+            "package_key": "tatara-rust-validate-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -2588,7 +2588,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-rust-tlisp-0.1.4": {
+      "tatara-rust-tlisp-0.1.5": {
         "runtime_dependencies": [
           {
             "name": "serde",
@@ -2614,7 +2614,7 @@
           },
           {
             "name": "tatara_rust_ast",
-            "package_key": "tatara-rust-ast-0.1.4",
+            "package_key": "tatara-rust-ast-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -2624,7 +2624,7 @@
           },
           {
             "name": "tatara_rust_catalog",
-            "package_key": "tatara-rust-catalog-0.1.4",
+            "package_key": "tatara-rust-catalog-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -2634,7 +2634,7 @@
           },
           {
             "name": "tatara_rust_composite",
-            "package_key": "tatara-rust-composite-0.1.4",
+            "package_key": "tatara-rust-composite-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -2644,7 +2644,7 @@
           },
           {
             "name": "tatara_rust_derive",
-            "package_key": "tatara-rust-derive-0.1.4",
+            "package_key": "tatara-rust-derive-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -2654,7 +2654,7 @@
           },
           {
             "name": "tatara_rust_macro_rules",
-            "package_key": "tatara-rust-macro-rules-0.1.4",
+            "package_key": "tatara-rust-macro-rules-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -2664,7 +2664,7 @@
           },
           {
             "name": "tatara_rust_proc_attr",
-            "package_key": "tatara-rust-proc-attr-0.1.4",
+            "package_key": "tatara-rust-proc-attr-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -2674,7 +2674,7 @@
           },
           {
             "name": "tatara_rust_proc_fn",
-            "package_key": "tatara-rust-proc-fn-0.1.4",
+            "package_key": "tatara-rust-proc-fn-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -2684,7 +2684,7 @@
           },
           {
             "name": "tatara_rust_suite",
-            "package_key": "tatara-rust-suite-0.1.4",
+            "package_key": "tatara-rust-suite-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -2706,7 +2706,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-rust-validate-0.1.4": {
+      "tatara-rust-validate-0.1.5": {
         "runtime_dependencies": [
           {
             "name": "serde",
@@ -2732,7 +2732,7 @@
           },
           {
             "name": "tatara_rust_ast",
-            "package_key": "tatara-rust-ast-0.1.4",
+            "package_key": "tatara-rust-ast-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -2742,7 +2742,7 @@
           },
           {
             "name": "tatara_rust_composite",
-            "package_key": "tatara-rust-composite-0.1.4",
+            "package_key": "tatara-rust-composite-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -2752,7 +2752,7 @@
           },
           {
             "name": "tatara_rust_derive",
-            "package_key": "tatara-rust-derive-0.1.4",
+            "package_key": "tatara-rust-derive-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -2762,7 +2762,7 @@
           },
           {
             "name": "tatara_rust_macro_rules",
-            "package_key": "tatara-rust-macro-rules-0.1.4",
+            "package_key": "tatara-rust-macro-rules-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -2772,7 +2772,7 @@
           },
           {
             "name": "tatara_rust_proc_attr",
-            "package_key": "tatara-rust-proc-attr-0.1.4",
+            "package_key": "tatara-rust-proc-attr-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -2782,7 +2782,7 @@
           },
           {
             "name": "tatara_rust_proc_fn",
-            "package_key": "tatara-rust-proc-fn-0.1.4",
+            "package_key": "tatara-rust-proc-fn-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -2804,7 +2804,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-rust-verify-0.1.4": {
+      "tatara-rust-verify-0.1.5": {
         "runtime_dependencies": [
           {
             "name": "prettyplease",
@@ -2865,7 +2865,7 @@
           },
           {
             "name": "tatara_rust_ast",
-            "package_key": "tatara-rust-ast-0.1.4",
+            "package_key": "tatara-rust-ast-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -2875,7 +2875,7 @@
           },
           {
             "name": "tatara_rust_catalog",
-            "package_key": "tatara-rust-catalog-0.1.4",
+            "package_key": "tatara-rust-catalog-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -2885,7 +2885,7 @@
           },
           {
             "name": "tatara_rust_composite",
-            "package_key": "tatara-rust-composite-0.1.4",
+            "package_key": "tatara-rust-composite-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -2895,7 +2895,7 @@
           },
           {
             "name": "tatara_rust_derive",
-            "package_key": "tatara-rust-derive-0.1.4",
+            "package_key": "tatara-rust-derive-0.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -3997,84 +3997,84 @@
     "syn-2.0.117": {
       "edition": "2021"
     },
-    "tatara-rust-ast-0.1.4": {
+    "tatara-rust-ast-0.1.5": {
       "edition": "2024",
       "lib_target": {
         "name": "tatara_rust_ast",
         "path": "src/lib.rs"
       }
     },
-    "tatara-rust-attr-0.1.4": {
+    "tatara-rust-attr-0.1.5": {
       "edition": "2024",
       "lib_target": {
         "name": "tatara_rust_attr",
         "path": "src/lib.rs"
       }
     },
-    "tatara-rust-caixa-0.1.4": {
+    "tatara-rust-caixa-0.1.5": {
       "edition": "2024",
       "lib_target": {
         "name": "tatara_rust_caixa",
         "path": "src/lib.rs"
       }
     },
-    "tatara-rust-catalog-0.1.4": {
+    "tatara-rust-catalog-0.1.5": {
       "edition": "2024",
       "lib_target": {
         "name": "tatara_rust_catalog",
         "path": "src/lib.rs"
       }
     },
-    "tatara-rust-composite-0.1.4": {
+    "tatara-rust-composite-0.1.5": {
       "edition": "2024",
       "lib_target": {
         "name": "tatara_rust_composite",
         "path": "src/lib.rs"
       }
     },
-    "tatara-rust-derive-0.1.4": {
+    "tatara-rust-derive-0.1.5": {
       "edition": "2024",
       "lib_target": {
         "name": "tatara_rust_derive",
         "path": "src/lib.rs"
       }
     },
-    "tatara-rust-docs-0.1.4": {
+    "tatara-rust-docs-0.1.5": {
       "edition": "2024",
       "lib_target": {
         "name": "tatara_rust_docs",
         "path": "src/lib.rs"
       }
     },
-    "tatara-rust-dsl-0.1.4": {
+    "tatara-rust-dsl-0.1.5": {
       "edition": "2024",
       "lib_target": {
         "name": "tatara_rust_dsl",
         "path": "src/lib.rs"
       }
     },
-    "tatara-rust-emit-0.1.4": {
+    "tatara-rust-emit-0.1.5": {
       "edition": "2024",
       "lib_target": {
         "name": "tatara_rust_emit",
         "path": "src/lib.rs"
       }
     },
-    "tatara-rust-examples-0.1.4": {
+    "tatara-rust-examples-0.1.5": {
       "edition": "2024",
       "lib_target": {
         "name": "tatara_rust_examples",
         "path": "src/lib.rs"
       }
     },
-    "tatara-rust-flake-0.1.4": {
+    "tatara-rust-flake-0.1.5": {
       "edition": "2024",
       "lib_target": {
         "name": "tatara_rust_flake",
         "path": "src/lib.rs"
       }
     },
-    "tatara-rust-forge-0.1.4": {
+    "tatara-rust-forge-0.1.5": {
       "edition": "2024",
       "binaries": [
         {
@@ -4083,105 +4083,105 @@
         }
       ]
     },
-    "tatara-rust-gate-0.1.4": {
+    "tatara-rust-gate-0.1.5": {
       "edition": "2024",
       "lib_target": {
         "name": "tatara_rust_gate",
         "path": "src/lib.rs"
       }
     },
-    "tatara-rust-macro-rules-0.1.4": {
+    "tatara-rust-macro-rules-0.1.5": {
       "edition": "2024",
       "lib_target": {
         "name": "tatara_rust_macro_rules",
         "path": "src/lib.rs"
       }
     },
-    "tatara-rust-parse-0.1.4": {
+    "tatara-rust-parse-0.1.5": {
       "edition": "2024",
       "lib_target": {
         "name": "tatara_rust_parse",
         "path": "src/lib.rs"
       }
     },
-    "tatara-rust-proc-attr-0.1.4": {
+    "tatara-rust-proc-attr-0.1.5": {
       "edition": "2024",
       "lib_target": {
         "name": "tatara_rust_proc_attr",
         "path": "src/lib.rs"
       }
     },
-    "tatara-rust-proc-fn-0.1.4": {
+    "tatara-rust-proc-fn-0.1.5": {
       "edition": "2024",
       "lib_target": {
         "name": "tatara_rust_proc_fn",
         "path": "src/lib.rs"
       }
     },
-    "tatara-rust-proptest-0.1.4": {
+    "tatara-rust-proptest-0.1.5": {
       "edition": "2024",
       "lib_target": {
         "name": "tatara_rust_proptest",
         "path": "src/lib.rs"
       }
     },
-    "tatara-rust-publish-0.1.4": {
+    "tatara-rust-publish-0.1.5": {
       "edition": "2024",
       "lib_target": {
         "name": "tatara_rust_publish",
         "path": "src/lib.rs"
       }
     },
-    "tatara-rust-repo-0.1.4": {
+    "tatara-rust-repo-0.1.5": {
       "edition": "2024",
       "lib_target": {
         "name": "tatara_rust_repo",
         "path": "src/lib.rs"
       }
     },
-    "tatara-rust-snapshot-0.1.4": {
+    "tatara-rust-snapshot-0.1.5": {
       "edition": "2024",
       "lib_target": {
         "name": "tatara_rust_snapshot",
         "path": "src/lib.rs"
       }
     },
-    "tatara-rust-suite-0.1.4": {
+    "tatara-rust-suite-0.1.5": {
       "edition": "2024",
       "lib_target": {
         "name": "tatara_rust_suite",
         "path": "src/lib.rs"
       }
     },
-    "tatara-rust-survey-0.1.4": {
+    "tatara-rust-survey-0.1.5": {
       "edition": "2024",
       "lib_target": {
         "name": "tatara_rust_survey",
         "path": "src/lib.rs"
       }
     },
-    "tatara-rust-test-0.1.4": {
+    "tatara-rust-test-0.1.5": {
       "edition": "2024",
       "lib_target": {
         "name": "tatara_rust_test",
         "path": "src/lib.rs"
       }
     },
-    "tatara-rust-tlisp-0.1.4": {
+    "tatara-rust-tlisp-0.1.5": {
       "edition": "2024",
       "lib_target": {
         "name": "tatara_rust_tlisp",
         "path": "src/lib.rs"
       }
     },
-    "tatara-rust-validate-0.1.4": {
+    "tatara-rust-validate-0.1.5": {
       "edition": "2024",
       "lib_target": {
         "name": "tatara_rust_validate",
         "path": "src/lib.rs"
       }
     },
-    "tatara-rust-verify-0.1.4": {
+    "tatara-rust-verify-0.1.5": {
       "edition": "2024",
       "lib_target": {
         "name": "tatara_rust_verify",
