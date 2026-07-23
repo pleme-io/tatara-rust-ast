@@ -46,6 +46,7 @@ macro_rules! defperfield {
             impl_prelude: $crate::__opt_string!($($prelude)?),
             skip_fields: vec![],
             field_attribute: None,
+            field_tag: None,
         }
     };
 }

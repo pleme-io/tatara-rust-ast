@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 use tatara_rust_composite::{CompositeDeriveSpec, CompositeMember};
 use tatara_rust_derive::{
     ClosedAxisSpec, EnumFoldDeriveSpec, KindRoundTripSpec, NewtypeDeriveSpec, PerFieldDeriveSpec,
-    PerVariantDeriveSpec, ProcDeriveSpec, VerificationMatrixSpec,
+    PerVariantDeriveSpec, ProcDeriveSpec, TagSpec, VerificationMatrixSpec,
 };
 use tatara_rust_macro_rules::MacroRulesSpec;
 use tatara_rust_proc_attr::ProcAttrSpec;
@@ -63,6 +63,26 @@ pub enum Violation {
     /// `ClosedAxisSpec.axis_trait_path` is empty — the emitted
     /// `impl <path> for Self` would be `impl  for Self` and fail to parse.
     EmptyTraitPath { spec_name: String },
+
+    /// `PerFieldDeriveSpec.field_tag` is `Some` but `tags` is empty —
+    /// nothing could ever match, so every field would hit the
+    /// zero-tags-matched path unconditionally.
+    FieldTagEmpty { spec_name: String },
+
+    /// Two entries in `field_tag.tags` share the same `name` — the
+    /// generated derive's `attributes(...)` list would register the
+    /// same helper attribute twice and the dispatch `if` chain would
+    /// never reach the second one.
+    FieldTagDuplicateName { spec_name: String, duplicate_name: String },
+
+    /// A `field_tag.tags[]` entry's own `per_field_template` contains no
+    /// splice holes — same mistake `TemplateMissingSpliceHoles` catches
+    /// for the single-template case, generalized per-tag.
+    FieldTagTemplateMissingSpliceHoles {
+        spec_name: String,
+        tag_name: String,
+        template: String,
+    },
 }
 
 pub trait Validate {
@@ -85,19 +105,56 @@ impl Validate for PerFieldDeriveSpec {
     fn validate(&self) -> Vec<Violation> {
         let mut v = vec![];
         check_ident("PerFieldDeriveSpec.trait_name", &self.trait_name.0, &mut v);
-        check_template_splices(
-            "PerFieldDeriveSpec",
-            &self.trait_name.0,
-            &self.per_field_template,
-            &["#field_name", "#field_ty", "#method_ident", "#self_name"],
-            &mut v,
-        );
+        // `field_tag` mode takes over per-field rendering entirely (see
+        // its own doc comment) — `per_field_template` is unused in that
+        // mode, so checking IT for splice holes would be checking dead
+        // text. Check each tag's OWN template instead.
+        if self.field_tag.is_none() {
+            check_template_splices(
+                "PerFieldDeriveSpec",
+                &self.trait_name.0,
+                &self.per_field_template,
+                &["#field_name", "#field_ty", "#method_ident", "#self_name"],
+                &mut v,
+            );
+        }
         check_method_template(
             &self.trait_name.0,
             self.method_name_template.as_deref(),
             &mut v,
         );
+        if let Some(tag_spec) = &self.field_tag {
+            check_field_tag(&self.trait_name.0, tag_spec, &mut v);
+        }
         v
+    }
+}
+
+fn check_field_tag(spec_name: &str, tag_spec: &TagSpec, out: &mut Vec<Violation>) {
+    if tag_spec.tags.is_empty() {
+        out.push(Violation::FieldTagEmpty {
+            spec_name: spec_name.into(),
+        });
+        return;
+    }
+    let mut seen = std::collections::HashSet::new();
+    for tag in &tag_spec.tags {
+        if !seen.insert(tag.name.as_str()) {
+            out.push(Violation::FieldTagDuplicateName {
+                spec_name: spec_name.into(),
+                duplicate_name: tag.name.clone(),
+            });
+        }
+        let mut candidates: Vec<&str> = vec!["#field_name", "#field_ty", "#method_ident", "#self_name"];
+        let arg_holes: Vec<String> = tag.required_args.iter().map(|a| format!("#{a}")).collect();
+        candidates.extend(arg_holes.iter().map(String::as_str));
+        if !candidates.iter().any(|h| tag.per_field_template.contains(h)) {
+            out.push(Violation::FieldTagTemplateMissingSpliceHoles {
+                spec_name: spec_name.into(),
+                tag_name: tag.name.clone(),
+                template: tag.per_field_template.clone(),
+            });
+        }
     }
 }
 
@@ -356,7 +413,89 @@ mod tests {
             impl_prelude: None,
             skip_fields: vec![],
             field_attribute: None,
+            field_tag: None,
         }
+    }
+
+    fn good_field_tag_spec() -> PerFieldDeriveSpec {
+        PerFieldDeriveSpec {
+            trait_name: Ident::new("HotSwap"),
+            target: PerFieldTarget::NamedStruct,
+            trait_ref: None,
+            per_field_template: String::new(),
+            method_name_template: None,
+            impl_prelude: None,
+            skip_fields: vec![],
+            field_attribute: None,
+            field_tag: Some(TagSpec {
+                exhaustive: true,
+                tags: vec![
+                    tatara_rust_derive::FieldTag {
+                        name: "hot_swap".into(),
+                        required_args: vec![],
+                        per_field_template: "(#field_name, HotSwapClass::Free)".into(),
+                    },
+                    tatara_rust_derive::FieldTag {
+                        name: "restart_required".into(),
+                        required_args: vec!["reason".into()],
+                        per_field_template:
+                            "(#field_name, HotSwapClass::RequiresRestart { reason: #reason })".into(),
+                    },
+                ],
+            }),
+        }
+    }
+
+    #[test]
+    fn good_field_tag_spec_validates_clean() {
+        assert!(good_field_tag_spec().validate().is_empty());
+    }
+
+    #[test]
+    fn field_tag_empty_tags_caught() {
+        let mut s = good_field_tag_spec();
+        s.field_tag = Some(TagSpec {
+            tags: vec![],
+            exhaustive: true,
+        });
+        let v = s.validate();
+        assert!(matches!(v.first(), Some(Violation::FieldTagEmpty { .. })));
+    }
+
+    #[test]
+    fn field_tag_duplicate_name_caught() {
+        let mut s = good_field_tag_spec();
+        if let Some(ts) = s.field_tag.as_mut() {
+            let first = ts.tags[0].clone();
+            ts.tags.push(first);
+        }
+        let v = s.validate();
+        assert!(v.iter().any(|x| matches!(x, Violation::FieldTagDuplicateName { .. })));
+    }
+
+    #[test]
+    fn field_tag_template_missing_splice_holes_caught() {
+        let mut s = good_field_tag_spec();
+        if let Some(ts) = s.field_tag.as_mut() {
+            ts.tags[0].per_field_template = "()".into();
+        }
+        let v = s.validate();
+        assert!(v
+            .iter()
+            .any(|x| matches!(x, Violation::FieldTagTemplateMissingSpliceHoles { .. })));
+    }
+
+    #[test]
+    fn per_field_template_check_skipped_in_field_tag_mode() {
+        // good_field_tag_spec() has an EMPTY per_field_template (unused
+        // in field_tag mode) -- if the old uniform-template check still
+        // ran, this would spuriously fail with TemplateMissingSpliceHoles
+        // on the ROOT spec (not a per-tag one).
+        let v = good_field_tag_spec().validate();
+        assert!(!v.iter().any(|x| matches!(
+            x,
+            Violation::TemplateMissingSpliceHoles { spec_name, .. } if spec_name == "HotSwap"
+        )));
     }
 
     #[test]

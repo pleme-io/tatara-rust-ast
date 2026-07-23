@@ -51,6 +51,7 @@ fn explicit_hint_matches_inferred_for_canonical_specs() {
                     impl_prelude: None,
                     skip_fields: vec![],
                     field_attribute: None,
+                    field_tag: None,
                 },
             },
             VerifierHint::PerFieldGetter,
@@ -127,6 +128,7 @@ fn compile_only_hint_short_circuits_inference() {
             impl_prelude: None,
             skip_fields: vec![],
             field_attribute: None,
+            field_tag: None,
         },
     };
     let inferred = render_lib_rs(&cat(entry("foo-derive", None, spec.clone())));

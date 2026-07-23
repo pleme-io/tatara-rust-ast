@@ -22,6 +22,7 @@
 //!     impl_prelude: None,
 //!     skip_fields: vec![],
 //!     field_attribute: None,
+//!     field_tag: None,
 //! };
 //! let setter = PerFieldDeriveSpec {
 //!     trait_name: Ident::new("AccessorSetter"),
@@ -33,6 +34,7 @@
 //!     impl_prelude: None,
 //!     skip_fields: vec![],
 //!     field_attribute: None,
+//!     field_tag: None,
 //! };
 //! let bundle = CompositeDeriveSpec {
 //!     bundle_name: Ident::new("Accessor"),
@@ -266,6 +268,7 @@ mod tests {
             impl_prelude: None,
             skip_fields: vec![],
             field_attribute: None,
+            field_tag: None,
         };
         let setter = PerFieldDeriveSpec {
             trait_name: Ident::new("AccessorSetter"),
@@ -277,6 +280,7 @@ mod tests {
             impl_prelude: None,
             skip_fields: vec![],
             field_attribute: None,
+            field_tag: None,
         };
         CompositeDeriveSpec {
             bundle_name: Ident::new("Accessor"),

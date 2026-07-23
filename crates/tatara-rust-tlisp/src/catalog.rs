@@ -33,9 +33,9 @@ use tatara_rust_ast::Ident;
 use tatara_rust_catalog::{CatalogEntry, CatalogSpec, MacroCatalogSpec, VerifierHint};
 use tatara_rust_composite::CompositeDeriveSpec;
 use tatara_rust_derive::{
-    ClosedAxisSpec, EnumFoldDeriveSpec, EnumFoldTarget, KindRoundTripSpec, NewtypeDeriveSpec,
-    NewtypeTarget, PerFieldDeriveSpec, PerFieldTarget, PerVariantDeriveSpec, ProcDeriveSpec,
-    VariantShape, VerificationMatrixSpec,
+    ClosedAxisSpec, EnumFoldDeriveSpec, EnumFoldTarget, FieldTag, KindRoundTripSpec,
+    NewtypeDeriveSpec, NewtypeTarget, PerFieldDeriveSpec, PerFieldTarget, PerVariantDeriveSpec,
+    ProcDeriveSpec, TagSpec, VariantShape, VerificationMatrixSpec,
 };
 use tatara_rust_macro_rules::{MacroArm, MacroRulesSpec};
 use tatara_rust_proc_attr::{AttrTransform, ProcAttrSpec};
@@ -494,12 +494,52 @@ fn parse_per_field_spec(items: &[SExpr]) -> Result<PerFieldDeriveSpec, ParseErro
             }
         },
         trait_ref: opt_str_kw(items, "trait-ref"),
-        per_field_template: expect_str_kw(items, "per-field-template")?,
+        // Unused (empty string) when `field-tag` is present -- the
+        // per-field.rs emitter dispatches through field_tag's own
+        // per-tag templates in that mode. expect_str_kw would fail on
+        // an absent `:per-field-template`, so field-tag specs authors
+        // omit it -- fall back to "" rather than requiring a dead key.
+        per_field_template: opt_str_kw(items, "per-field-template").unwrap_or_default(),
         method_name_template: opt_str_kw(items, "method-name-template"),
         impl_prelude: opt_str_kw(items, "impl-prelude"),
         skip_fields: opt_str_list_kw(items, "skip-fields"),
         field_attribute: opt_str_kw(items, "field-attribute"),
+        field_tag: opt_field_tag_kw(items, "field-tag")?,
     })
+}
+
+/// Parses `:field-tag ( :exhaustive t :tags ( (:name "…" :required-args
+/// (…) :per-field-template "…") … ) )` into a [`TagSpec`]. Absent
+/// keyword ⇒ `Ok(None)` (today's uniform-template behavior, unchanged).
+fn opt_field_tag_kw(items: &[SExpr], kw: &str) -> Result<Option<TagSpec>, ParseError> {
+    let Ok(value) = find_kw_value(items, kw) else {
+        return Ok(None);
+    };
+    let outer = value
+        .as_list()
+        .ok_or_else(|| ParseError::ShapeError(kw.into(), "expected a list".into()))?;
+
+    let exhaustive = opt_bool_kw(outer, "exhaustive");
+    let tags_value = find_kw_value(outer, "tags")?;
+    let tag_forms = tags_value
+        .as_list()
+        .ok_or_else(|| ParseError::ShapeError("field-tag.tags".into(), "expected a list".into()))?;
+
+    let tags = tag_forms
+        .iter()
+        .map(|form| {
+            let form_items = form
+                .as_list()
+                .ok_or_else(|| ParseError::ShapeError("field-tag.tags[]".into(), "expected a list".into()))?;
+            Ok(FieldTag {
+                name: expect_str_kw(form_items, "name")?,
+                required_args: opt_str_list_kw(form_items, "required-args"),
+                per_field_template: expect_str_kw(form_items, "per-field-template")?,
+            })
+        })
+        .collect::<Result<Vec<FieldTag>, ParseError>>()?;
+
+    Ok(Some(TagSpec { tags, exhaustive }))
 }
 
 fn parse_per_variant_spec(items: &[SExpr]) -> Result<PerVariantDeriveSpec, ParseError> {
@@ -665,10 +705,14 @@ fn render_spec_body(spec: &CatalogSpec) -> String {
             if let Some(t) = &spec.trait_ref {
                 s.push_str(&format!("        :trait-ref {}\n", quote_str(t)));
             }
-            s.push_str(&format!(
-                "        :per-field-template {}\n",
-                quote_str(&spec.per_field_template)
-            ));
+            // `field_tag` mode leaves `per_field_template` empty (unused
+            // — each tag carries its own) -- skip emitting a dead key.
+            if !(spec.per_field_template.is_empty() && spec.field_tag.is_some()) {
+                s.push_str(&format!(
+                    "        :per-field-template {}\n",
+                    quote_str(&spec.per_field_template)
+                ));
+            }
             if let Some(t) = &spec.method_name_template {
                 s.push_str(&format!(
                     "        :method-name-template {}\n",
@@ -689,6 +733,9 @@ fn render_spec_body(spec: &CatalogSpec) -> String {
             }
             if let Some(a) = &spec.field_attribute {
                 s.push_str(&format!("        :field-attribute {}\n", quote_str(a)));
+            }
+            if let Some(tag_spec) = &spec.field_tag {
+                s.push_str(&render_field_tag(tag_spec));
             }
         }
         CatalogSpec::PerVariant { spec } => {
@@ -870,6 +917,74 @@ fn quote_str(s: &str) -> String {
     format!("\"{escaped}\"")
 }
 
+/// Renders an [`SExpr`] tree to canonical tlisp text — the typed
+/// pretty-printer counterpart to [`SExpr`]'s existing role as the
+/// parser's typed IR (★★ TYPED EMISSION: this crate targets tlisp
+/// syntax as its "target language", so `SExpr` is that language's typed
+/// AST, the same way `PerFieldDeriveSpec::render_lib_rs` targets Rust
+/// syntax via `quote!`+`syn`+`prettyplease`). New multi-field lisp forms
+/// (like `field-tag` below) build an `SExpr` tree and render it through
+/// this ONE function, rather than each hand-formatting its own strings
+/// — the ~10 other `render_spec_body` arms predate this pretty-printer
+/// and still hand-format; retrofitting them is real, separate follow-up
+/// work, named here rather than silently taken on or silently skipped.
+fn render_sexpr(e: &SExpr, indent: usize) -> String {
+    match e {
+        SExpr::Sym(s) => s.clone(),
+        SExpr::Kw(s) => format!(":{s}"),
+        SExpr::Str(s) => quote_str(s),
+        SExpr::Int(i) => i.to_string(),
+        SExpr::List(items) => {
+            if items.is_empty() {
+                return "()".to_string();
+            }
+            let pad = "  ".repeat(indent + 1);
+            let closing_pad = "  ".repeat(indent);
+            let body = items
+                .iter()
+                .map(|it| format!("{pad}{}", render_sexpr(it, indent + 1)))
+                .collect::<Vec<_>>()
+                .join("\n");
+            format!("(\n{body}\n{closing_pad})")
+        }
+    }
+}
+
+/// Builds the typed [`SExpr`] tree for a [`TagSpec`], then renders it
+/// via [`render_sexpr`] — the typed-AST path `opt_field_tag_kw` above
+/// parses back out.
+fn render_field_tag(tag_spec: &TagSpec) -> String {
+    let exhaustive_sym = if tag_spec.exhaustive { "t" } else { "nil" };
+    let tag_exprs: Vec<SExpr> = tag_spec
+        .tags
+        .iter()
+        .map(|tag| {
+            let mut fields = vec![
+                SExpr::Kw("name".into()),
+                SExpr::Str(tag.name.clone()),
+            ];
+            if !tag.required_args.is_empty() {
+                fields.push(SExpr::Kw("required-args".into()));
+                fields.push(SExpr::List(
+                    tag.required_args.iter().map(|a| SExpr::Str(a.clone())).collect(),
+                ));
+            }
+            fields.push(SExpr::Kw("per-field-template".into()));
+            fields.push(SExpr::Str(tag.per_field_template.clone()));
+            SExpr::List(fields)
+        })
+        .collect();
+
+    let field_tag_form = SExpr::List(vec![
+        SExpr::Kw("exhaustive".into()),
+        SExpr::Sym(exhaustive_sym.into()),
+        SExpr::Kw("tags".into()),
+        SExpr::List(tag_exprs),
+    ]);
+
+    format!("        :field-tag {}\n", render_sexpr(&field_tag_form, 4))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -895,6 +1010,7 @@ mod tests {
                         impl_prelude: None,
                         skip_fields: vec![],
                         field_attribute: None,
+                        field_tag: None,
                     },
                 },
             }],
@@ -934,6 +1050,7 @@ mod tests {
                             impl_prelude: None,
                             skip_fields: vec![],
                             field_attribute: None,
+                            field_tag: None,
                         },
                     },
                 },

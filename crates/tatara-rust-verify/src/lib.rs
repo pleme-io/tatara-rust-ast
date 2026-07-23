@@ -1383,6 +1383,7 @@ mod tests {
                             impl_prelude: None,
                             skip_fields: vec![],
                             field_attribute: None,
+                            field_tag: None,
                         },
                     },
                 },

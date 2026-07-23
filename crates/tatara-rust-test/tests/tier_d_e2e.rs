@@ -44,6 +44,7 @@ fn validate_catches_empty_trait_name() {
         impl_prelude: None,
         skip_fields: vec![],
         field_attribute: None,
+        field_tag: None,
     };
     let v = pfs.validate();
     assert!(matches!(v.first(), Some(Violation::EmptyIdent { .. })));
@@ -73,6 +74,7 @@ fn catalog_materializes_and_runs_validation() {
                     impl_prelude: None,
                     skip_fields: vec![],
                     field_attribute: None,
+                    field_tag: None,
                 },
             },
         }],

@@ -81,6 +81,7 @@ pub fn arb_per_field_spec() -> impl Strategy<Value = PerFieldDeriveSpec> {
                     impl_prelude: None,
                     skip_fields: vec![],
                     field_attribute: None,
+                    field_tag: None,
                 }
             },
         )

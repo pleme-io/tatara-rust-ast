@@ -43,6 +43,7 @@ fn every_variant() -> Vec<(CatalogSpec, &'static str)> {
                     impl_prelude: None,
                     skip_fields: vec![],
                     field_attribute: None,
+                    field_tag: None,
                 },
             },
             "per-field",

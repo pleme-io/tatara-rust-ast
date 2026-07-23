@@ -55,7 +55,7 @@ pub use closed_axis::ClosedAxisSpec;
 pub use enum_fold::{EnumFoldDeriveSpec, EnumFoldTarget};
 pub use kind_round_trip::KindRoundTripSpec;
 pub use newtype::{NewtypeDeriveSpec, NewtypeTarget};
-pub use per_field::{PerFieldDeriveSpec, PerFieldTarget};
+pub use per_field::{FieldTag, PerFieldDeriveSpec, PerFieldTarget, TagSpec};
 pub use per_variant::{PerVariantDeriveSpec, VariantShape};
 pub use verification_matrix::VerificationMatrixSpec;
 

@@ -72,6 +72,68 @@ pub struct PerFieldDeriveSpec {
     /// `None` = no filtering by attribute (all fields participate).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub field_attribute: Option<String>,
+    /// Exhaustive multi-tag classification: every included field must
+    /// carry exactly one of [`TagSpec::tags`]'s named attributes, or the
+    /// derive emits a `compile_error!()` naming the field (when
+    /// [`TagSpec::exhaustive`] is `true`) — or is silently excluded
+    /// (when `false`, the N-tag generalization of [`Self::field_attribute`]'s
+    /// existing single-tag behavior). Each tag carries its OWN
+    /// `per_field_template` (unlike [`Self::per_field_template`], which
+    /// is one template applied uniformly) plus any named string
+    /// arguments the consumer's attribute must supply
+    /// (`#[restart_required(reason = "...")]`'s `reason`).
+    ///
+    /// Mutually exclusive with [`Self::field_attribute`] at the type
+    /// level is NOT enforced here (both can be set), but the generated
+    /// derive dispatches through `field_tag` when set — it takes over
+    /// per-field rendering, and [`Self::per_field_template`] /
+    /// [`Self::field_attribute`] are IGNORED. `skip_fields` still
+    /// applies as a pre-filter in both modes.
+    ///
+    /// `None` = today's uniform-template behavior, unchanged.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub field_tag: Option<TagSpec>,
+}
+
+/// One named field-classification tag (`theory/CALHA.md` §4/§6.1's
+/// `field_tag`/`TagSpec`, e.g. `["hot_swap", "restart_required"]`).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FieldTag {
+    /// The consumer-side attribute name, e.g. `"hot_swap"` or
+    /// `"restart_required"`.
+    pub name: String,
+    /// Named string arguments this tag's attribute must supply, e.g.
+    /// `["reason"]` for `#[restart_required(reason = "...")]`. Empty for
+    /// a bare `#[hot_swap]`. Each name becomes an additional splice hole
+    /// in this tag's `per_field_template`, spliced as `#<name>` bound to
+    /// the parsed string literal — e.g. `required_args: ["reason"]`
+    /// makes `#reason` available in `per_field_template`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub required_args: Vec<String>,
+    /// This tag's own per-field code fragment. Same splice holes as
+    /// [`PerFieldDeriveSpec::per_field_template`] (`#field_name`,
+    /// `#field_ty`, `#method_ident` when `method_name_template` is set),
+    /// PLUS one hole per entry in `required_args`.
+    pub per_field_template: String,
+}
+
+/// Exhaustive multi-tag classification config — see
+/// [`PerFieldDeriveSpec::field_tag`].
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TagSpec {
+    /// The set of tags a field may carry. Must be non-empty
+    /// (`compile_to_crate` returns [`AstError`] otherwise) and every
+    /// [`FieldTag::name`] must be unique.
+    pub tags: Vec<FieldTag>,
+    /// `true`: every included field MUST carry exactly one of `tags`, or
+    /// the generated derive emits a `compile_error!()` naming the field
+    /// and listing the legal tag names. A field carrying MORE than one
+    /// tag is always a `compile_error!()` (ambiguous), regardless of
+    /// this flag.
+    /// `false`: an untagged field is silently excluded from the
+    /// generated impl (matches today's single-tag `field_attribute`
+    /// behavior, generalized to N tags).
+    pub exhaustive: bool,
 }
 
 impl PerFieldDeriveSpec {
@@ -94,11 +156,42 @@ impl PerFieldDeriveSpec {
 
 impl CompileToCrate for PerFieldDeriveSpec {
     fn compile_to_crate(&self, crate_name: &str) -> Result<CrateScaffold, AstError> {
+        validate_field_tag(self.field_tag.as_ref())?;
         let mut s = CrateScaffold::new(crate_name, "0.1.0");
         s.add_file("Cargo.toml", render_cargo_toml(crate_name));
         s.add_file("src/lib.rs", render_lib_rs(self));
         Ok(s)
     }
+}
+
+/// Validates a [`TagSpec`] at spec-authoring time (not consumer-compile
+/// time) — a spec author error here is a Rust compile error in THIS
+/// crate's own tests / `catalog-instantiate` run, never surfaced as a
+/// confusing error deep in a consumer's derive expansion.
+fn validate_field_tag(spec: Option<&TagSpec>) -> Result<(), AstError> {
+    let Some(spec) = spec else {
+        return Ok(());
+    };
+    if spec.tags.is_empty() {
+        return Err(AstError::InvalidSpec(
+            "field_tag.tags must be non-empty when field_tag is set".into(),
+        ));
+    }
+    let mut seen = std::collections::HashSet::new();
+    for tag in &spec.tags {
+        if tag.name.is_empty() {
+            return Err(AstError::InvalidSpec(
+                "field_tag.tags[].name must be non-empty".into(),
+            ));
+        }
+        if !seen.insert(tag.name.as_str()) {
+            return Err(AstError::InvalidSpec(format!(
+                "field_tag.tags[].name `{}` is declared more than once",
+                tag.name
+            )));
+        }
+    }
+    Ok(())
 }
 
 fn render_cargo_toml(crate_name: &str) -> String {
@@ -205,13 +298,44 @@ fn render_lib_rs(spec: &PerFieldDeriveSpec) -> String {
     // When the spec opts into consumer-side per-field attributes,
     // `#[proc_macro_derive(Trait, attributes(<attr>))]` must list
     // them — otherwise syn rejects the consumer's `#[<attr>]` as
-    // unknown.
-    let derive_attr: TokenStream = match &spec.field_attribute {
-        None => quote! { #[proc_macro_derive(#trait_id)] },
-        Some(attr) => {
+    // unknown. `field_tag` mode lists every declared tag name.
+    let derive_attr: TokenStream = match (&spec.field_attribute, &spec.field_tag) {
+        (_, Some(tag_spec)) => {
+            let attr_ids: Vec<syn::Ident> = tag_spec
+                .tags
+                .iter()
+                .map(|t| format_ident!("{}", t.name))
+                .collect();
+            quote! { #[proc_macro_derive(#trait_id, attributes(#(#attr_ids),*))] }
+        }
+        (None, None) => quote! { #[proc_macro_derive(#trait_id)] },
+        (Some(attr), None) => {
             let attr_id = format_ident!("{attr}");
             quote! { #[proc_macro_derive(#trait_id, attributes(#attr_id))] }
         }
+    };
+
+    // `field_tag` mode takes over per-field rendering entirely (its own
+    // dispatch closure below), ignoring `per_field_template`/
+    // `field_attribute` — see `PerFieldDeriveSpec::field_tag`'s own doc
+    // comment for why these stay mutually exclusive AT THE CODEGEN
+    // level rather than being enforced unrepresentable at the type
+    // level (a spec author setting both is a spec smell, not something
+    // this emitter needs to police beyond "field_tag wins").
+    let per_field_closure: TokenStream = match &spec.field_tag {
+        Some(tag_spec) => {
+            render_field_tag_per_field(tag_spec, &method_ident_binding, &fields_iter)
+        }
+        None => quote! {
+            let per_field = #fields_iter.map(|f| {
+                let field_name = f.ident.as_ref().expect("named field has ident");
+                let field_ty = &f.ty;
+                #method_ident_binding
+                quote! {
+                    #per_field_body
+                }
+            });
+        },
     };
 
     let file: TokenStream = quote! {
@@ -241,14 +365,7 @@ fn render_lib_rs(spec: &PerFieldDeriveSpec) -> String {
 
             #skip_const
 
-            let per_field = #fields_iter.map(|f| {
-                let field_name = f.ident.as_ref().expect("named field has ident");
-                let field_ty = &f.ty;
-                #method_ident_binding
-                quote! {
-                    #per_field_body
-                }
-            });
+            #per_field_closure
 
             let expanded = quote! {
                 #impl_open {
@@ -263,6 +380,166 @@ fn render_lib_rs(spec: &PerFieldDeriveSpec) -> String {
     let parsed: syn::File =
         syn::parse2(file).expect("emitted lib.rs must parse as syn::File");
     prettyplease::unparse(&parsed)
+}
+
+/// Builds the `let per_field = ...;` binding for `field_tag` (exhaustive
+/// multi-tag) mode. Generates code that, AT CONSUMER-DERIVE-RUNTIME (i.e.
+/// when a downstream crate's struct is being macro-expanded): for each
+/// field, determines which of the declared tags it carries (0/1/N+),
+/// extracts that tag's required string arguments via
+/// `syn::Attribute::parse_nested_meta`, and renders that tag's OWN
+/// `per_field_template` — or emits a `compile_error!()` naming the field
+/// for the zero-tags (when exhaustive) or multiple-tags case.
+fn render_field_tag_per_field(
+    tag_spec: &TagSpec,
+    method_ident_binding: &TokenStream,
+    fields_iter: &TokenStream,
+) -> TokenStream {
+    let tag_name_lits: Vec<&str> = tag_spec.tags.iter().map(|t| t.name.as_str()).collect();
+    let exhaustive = tag_spec.exhaustive;
+
+    let match_arms: Vec<TokenStream> = tag_spec
+        .tags
+        .iter()
+        .map(|tag| render_tag_arm(tag, method_ident_binding))
+        .collect();
+    let tag_paths: Vec<syn::Ident> = tag_spec
+        .tags
+        .iter()
+        .map(|t| format_ident!("{}", t.name))
+        .collect();
+
+    // The literal `#msg` two-token sequence, for splicing into the INNER
+    // (consumer-derive-runtime) `quote::quote! { compile_error!(#msg); }`
+    // below — same escape trick `render_lib_rs` documents at its top:
+    // writing `#msg` directly inside THIS function's own `quote!{}` would
+    // have the OUTER (emitter-layer) quote! try to resolve `msg` from
+    // ITS OWN scope (where it doesn't exist), instead of splicing the
+    // literal tokens for the inner quote! to resolve later.
+    let hash_msg: TokenStream = "#msg".parse().expect("static literal must parse");
+
+    let zero_match_arm: TokenStream = if exhaustive {
+        quote! {
+            0 => {
+                let msg = format!(
+                    "field `{}` must carry exactly one of: {}",
+                    field_name,
+                    [#(#tag_name_lits),*].join(", "),
+                );
+                Some(quote::quote! { compile_error!(#hash_msg); })
+            }
+        }
+    } else {
+        quote! {
+            0 => None,
+        }
+    };
+
+    quote! {
+        const TAG_NAMES: &[&str] = &[#(#tag_name_lits),*];
+
+        let per_field = #fields_iter.filter_map(|f| {
+            let field_name = f.ident.as_ref().expect("named field has ident");
+            let field_ty = &f.ty;
+
+            let matched: Vec<&syn::Attribute> = f
+                .attrs
+                .iter()
+                .filter(|a| TAG_NAMES.iter().any(|&n| a.path().is_ident(n)))
+                .collect();
+
+            match matched.len() {
+                #zero_match_arm
+                1 => {
+                    let attr = matched[0];
+                    #(
+                        if attr.path().is_ident(stringify!(#tag_paths)) {
+                            #match_arms
+                        } else
+                    )* {
+                        unreachable!("attr matched TAG_NAMES but no tag branch handled it")
+                    }
+                }
+                _ => {
+                    let msg = format!(
+                        "field `{}` carries more than one hot-swap-style tag ({}) -- exactly one is required",
+                        field_name,
+                        matched
+                            .iter()
+                            .filter_map(|a| a.path().get_ident())
+                            .map(|i| i.to_string())
+                            .collect::<Vec<_>>()
+                            .join(", "),
+                    );
+                    Some(quote::quote! { compile_error!(#hash_msg); })
+                }
+            }
+        });
+    }
+}
+
+/// One `if attr.path().is_ident(...) { ... }` arm's body for a single
+/// [`FieldTag`]: parses this tag's `required_args` off `attr` (a
+/// `compile_error!()` per missing arg, not a panic — a proc-macro panic
+/// aborts with an opaque rustc-internal message instead of a clean
+/// diagnostic), then renders `tag.per_field_template` with those args
+/// (plus `#field_name`/`#field_ty`/`#method_ident`) as splice holes.
+fn render_tag_arm(tag: &FieldTag, method_ident_binding: &TokenStream) -> TokenStream {
+    let per_field_body: TokenStream = tag
+        .per_field_template
+        .parse()
+        .unwrap_or_else(|e| panic!("tag `{}`'s per_field_template must parse as TokenStream: {e}", tag.name));
+
+    if tag.required_args.is_empty() {
+        return quote! {
+            #method_ident_binding
+            Some(quote::quote! { #per_field_body })
+        };
+    }
+
+    let arg_idents: Vec<syn::Ident> = tag
+        .required_args
+        .iter()
+        .map(|a| format_ident!("{}", a))
+        .collect();
+    let arg_names: Vec<&str> = tag.required_args.iter().map(String::as_str).collect();
+    let tag_name = &tag.name;
+    // Same escape trick as `render_field_tag_per_field`'s `hash_msg` --
+    // `msg` below is a variable that exists only at layer 2 (the
+    // generated derive's own runtime body), never in THIS function's
+    // scope, so it must be spliced as literal tokens, not resolved here.
+    let hash_msg: TokenStream = "#msg".parse().expect("static literal must parse");
+
+    quote! {
+        #( let mut #arg_idents: Option<syn::LitStr> = None; )*
+        let parse_result = attr.parse_nested_meta(|meta| {
+            #(
+                if meta.path.is_ident(#arg_names) {
+                    #arg_idents = Some(meta.value()?.parse()?);
+                    return Ok(());
+                }
+            )*
+            Ok(())
+        });
+        if let Err(e) = parse_result {
+            let msg = e.to_string();
+            return Some(quote::quote! { compile_error!(#hash_msg); });
+        }
+        #(
+            let #arg_idents = match #arg_idents {
+                Some(v) => v,
+                None => {
+                    let msg = format!(
+                        "#[{}] on field `{}` is missing required argument `{}`",
+                        #tag_name, field_name, #arg_names,
+                    );
+                    return Some(quote::quote! { compile_error!(#hash_msg); });
+                }
+            };
+        )*
+        #method_ident_binding
+        Some(quote::quote! { #per_field_body })
+    }
 }
 
 #[cfg(test)]
@@ -280,6 +557,7 @@ mod tests {
             impl_prelude: None,
             skip_fields: vec![],
             field_attribute: None,
+            field_tag: None,
         }
     }
 
@@ -293,6 +571,7 @@ mod tests {
             impl_prelude: None,
             skip_fields: vec![],
             field_attribute: None,
+            field_tag: None,
         }
     }
 
@@ -358,5 +637,125 @@ mod tests {
         let j = serde_json::to_string(&s).unwrap();
         let back: PerFieldDeriveSpec = serde_json::from_str(&j).unwrap();
         assert_eq!(s, back);
+    }
+
+    // ── field_tag (exhaustive multi-tag classification) ─────────────────
+    // The shape `theory/CALHA.md` §4/§6.1/§6.2 names: a `HotSwap` derive
+    // with `#[hot_swap]` (no args) and `#[restart_required(reason = "...")]`
+    // (one required arg), exhaustive over every field.
+
+    fn hot_swap_spec() -> PerFieldDeriveSpec {
+        PerFieldDeriveSpec {
+            trait_name: Ident::new("HotSwap"),
+            target: PerFieldTarget::NamedStruct,
+            trait_ref: Some("pleme_hotswap::HotSwapClassifier".into()),
+            per_field_template: String::new(), // unused in field_tag mode
+            method_name_template: None,
+            impl_prelude: None,
+            skip_fields: vec![],
+            field_attribute: None,
+            field_tag: Some(TagSpec {
+                exhaustive: true,
+                tags: vec![
+                    FieldTag {
+                        name: "hot_swap".into(),
+                        required_args: vec![],
+                        per_field_template: "(stringify!(#field_name), pleme_hotswap::HotSwapClass::Free)".into(),
+                    },
+                    FieldTag {
+                        name: "restart_required".into(),
+                        required_args: vec!["reason".into()],
+                        per_field_template:
+                            "(stringify!(#field_name), pleme_hotswap::HotSwapClass::RequiresRestart { reason: #reason })"
+                                .into(),
+                    },
+                ],
+            }),
+        }
+    }
+
+    #[test]
+    fn validate_rejects_empty_tags() {
+        let err = validate_field_tag(Some(&TagSpec {
+            tags: vec![],
+            exhaustive: true,
+        }))
+        .unwrap_err();
+        assert!(matches!(err, AstError::InvalidSpec(_)));
+    }
+
+    #[test]
+    fn validate_rejects_duplicate_tag_names() {
+        let err = validate_field_tag(Some(&TagSpec {
+            exhaustive: true,
+            tags: vec![
+                FieldTag {
+                    name: "hot_swap".into(),
+                    required_args: vec![],
+                    per_field_template: "()".into(),
+                },
+                FieldTag {
+                    name: "hot_swap".into(),
+                    required_args: vec![],
+                    per_field_template: "()".into(),
+                },
+            ],
+        }))
+        .unwrap_err();
+        assert!(matches!(err, AstError::InvalidSpec(_)));
+    }
+
+    #[test]
+    fn validate_accepts_none() {
+        validate_field_tag(None).unwrap();
+    }
+
+    #[test]
+    fn field_tag_spec_compiles_to_parseable_lib_rs() {
+        let s = hot_swap_spec().compile_to_crate("hot-swap-derive").unwrap();
+        let lib = s.to_files().get("src/lib.rs").unwrap().clone();
+        let _: syn::File =
+            syn::parse_str(&lib).unwrap_or_else(|e| panic!("emitted lib.rs must parse: {e}\n{lib}"));
+    }
+
+    #[test]
+    fn field_tag_spec_declares_derive_with_all_tag_attributes() {
+        let s = hot_swap_spec().compile_to_crate("hot-swap-derive").unwrap();
+        let lib = s.to_files().get("src/lib.rs").unwrap().clone();
+        // Every declared tag name must be a registered helper attribute,
+        // or syn rejects the consumer's `#[hot_swap]`/`#[restart_required]`
+        // as unknown at THEIR compile time.
+        assert!(lib.contains("hot_swap"));
+        assert!(lib.contains("restart_required"));
+        assert!(lib.contains("proc_macro_derive"));
+    }
+
+    #[test]
+    fn field_tag_spec_references_compile_error_for_exhaustiveness() {
+        let s = hot_swap_spec().compile_to_crate("hot-swap-derive").unwrap();
+        let lib = s.to_files().get("src/lib.rs").unwrap().clone();
+        // The generated derive's own SOURCE must contain the machinery
+        // that emits compile_error! at consumer-derive-time for an
+        // untagged or ambiguously-tagged field. This does not prove the
+        // consumer-side behavior (that needs a real compiled-and-invoked
+        // proof — see tatara-rust-examples' hotswap trybuild fixtures);
+        // it proves the emitter didn't silently drop the exhaustiveness
+        // path.
+        assert!(lib.contains("compile_error"));
+        assert!(lib.contains("must carry exactly one of"));
+    }
+
+    #[test]
+    fn field_tag_non_exhaustive_omits_zero_match_compile_error() {
+        let mut spec = hot_swap_spec();
+        if let Some(tag_spec) = spec.field_tag.as_mut() {
+            tag_spec.exhaustive = false;
+        }
+        let s = spec.compile_to_crate("hot-swap-derive").unwrap();
+        let lib = s.to_files().get("src/lib.rs").unwrap().clone();
+        // Non-exhaustive mode's zero-tags arm is `0 => None,` -- no
+        // "must carry exactly one of" message should be emitted (the
+        // ambiguous multi-tag error stays either way).
+        assert!(!lib.contains("must carry exactly one of"));
     }
 }

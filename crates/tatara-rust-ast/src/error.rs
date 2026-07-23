@@ -13,4 +13,7 @@ pub enum AstError {
 
     #[error("toml serialize: {0}")]
     TomlSer(#[from] toml::ser::Error),
+
+    #[error("invalid spec: {0}")]
+    InvalidSpec(String),
 }
