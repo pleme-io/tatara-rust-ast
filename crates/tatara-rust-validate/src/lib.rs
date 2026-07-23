@@ -429,17 +429,22 @@ mod tests {
             field_attribute: None,
             field_tag: Some(TagSpec {
                 exhaustive: true,
+                aggregate: None,
                 tags: vec![
                     tatara_rust_derive::FieldTag {
                         name: "hot_swap".into(),
                         required_args: vec![],
                         per_field_template: "(#field_name, HotSwapClass::Free)".into(),
+                        aggregate_const_entry: None,
+                        aggregate_stmt: None,
                     },
                     tatara_rust_derive::FieldTag {
                         name: "restart_required".into(),
                         required_args: vec!["reason".into()],
                         per_field_template:
                             "(#field_name, HotSwapClass::RequiresRestart { reason: #reason })".into(),
+                        aggregate_const_entry: None,
+                        aggregate_stmt: None,
                     },
                 ],
             }),
@@ -457,6 +462,7 @@ mod tests {
         s.field_tag = Some(TagSpec {
             tags: vec![],
             exhaustive: true,
+            aggregate: None,
         });
         let v = s.validate();
         assert!(matches!(v.first(), Some(Violation::FieldTagEmpty { .. })));

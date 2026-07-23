@@ -95,6 +95,49 @@ pub struct PerFieldDeriveSpec {
     pub field_tag: Option<TagSpec>,
 }
 
+/// The AGGREGATE emission shape for `field_tag` — see
+/// [`TagSpec::aggregate`]. When set, `field_tag` stops emitting N
+/// independent per-field items and instead emits exactly TWO items,
+/// each populated by a per-field-repeated FRAGMENT (not a full item)
+/// contributed by [`FieldTag::aggregate_const_entry`] /
+/// [`FieldTag::aggregate_stmt`]: a `const` whose array literal holds one
+/// entry per field, and a method whose body accumulates one statement
+/// per field. This is the shape a real classification trait needs (e.g.
+/// `HotSwapClassifier::{FIELD_CLASSES, classify_change}`,
+/// `theory/CALHA.md` §4) — comparing `self` against `new` field-by-field
+/// inside ONE method, not N separate ones.
+///
+/// **Every field here MUST be independently balanced-delimiter Rust
+/// (parseable as a standalone `TokenStream` on its own)** — the array
+/// `[...]` and the method body `{...}` are constructed programmatically
+/// via `proc_macro2::Group` at codegen time, never by splitting a
+/// bracket/brace across two separately-parsed strings. An earlier draft
+/// tried `const_prelude: "... = &["` / `const_epilogue: "];"` and hit a
+/// real `LexError` on real `cargo test` — `TokenStream::parse` requires
+/// each parsed fragment to be self-balanced; a lone unmatched `[` cannot
+/// tokenize. Caught by the real e2e test, not by inspection.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AggregateSpec {
+    /// The const's signature up to (not including) the array literal —
+    /// balanced on its own, e.g.
+    /// `"const FIELD_CLASSES: &'static [(&'static str, HotSwapClass)] = "`
+    /// (the `[...]` here is a TYPE annotation, already balanced; the
+    /// array VALUE's brackets are added programmatically).
+    pub const_signature: String,
+    /// The method's signature up to (not including) the opening brace —
+    /// balanced on its own, e.g.
+    /// `"fn classify_change(&self, new: &Self) -> SwapDecision"`.
+    pub method_signature: String,
+    /// Statements run at the START of the method body, before the
+    /// per-field statements — balanced, complete statements, e.g.
+    /// `"let mut reasons: Vec<&'static str> = Vec::new();"`.
+    pub method_setup: String,
+    /// The method body's final expression (no trailing `;` needed) —
+    /// balanced on its own, e.g.
+    /// `"if reasons.is_empty() { SwapDecision::Free } else { SwapDecision::RequiresRestart(reasons) }"`.
+    pub method_return: String,
+}
+
 /// One named field-classification tag (`theory/CALHA.md` §4/§6.1's
 /// `field_tag`/`TagSpec`, e.g. `["hot_swap", "restart_required"]`).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -113,8 +156,24 @@ pub struct FieldTag {
     /// This tag's own per-field code fragment. Same splice holes as
     /// [`PerFieldDeriveSpec::per_field_template`] (`#field_name`,
     /// `#field_ty`, `#method_ident` when `method_name_template` is set),
-    /// PLUS one hole per entry in `required_args`.
+    /// PLUS one hole per entry in `required_args`. Ignored when the
+    /// enclosing [`TagSpec::aggregate`] is `Some` — use
+    /// `aggregate_const_entry`/`aggregate_stmt` instead in that mode.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub per_field_template: String,
+    /// AGGREGATE mode only (see [`TagSpec::aggregate`]): this tag's one
+    /// array-literal ENTRY (an expression, not an item), spliced inside
+    /// [`AggregateSpec::const_prelude`]/`const_epilogue`'s repetition —
+    /// e.g. `"(stringify!(#field_name), HotSwapClass::Free),"`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub aggregate_const_entry: Option<String>,
+    /// AGGREGATE mode only: this tag's one STATEMENT fragment, spliced
+    /// inside [`AggregateSpec::method_prelude`]/`method_epilogue`'s
+    /// repetition. Can reference `self.#field_name` / `new.#field_name`
+    /// directly (both are in scope inside the generated method) — e.g.
+    /// `"if self.#field_name != new.#field_name { worst = SwapDecision::RequiresRestart(vec![#reason]); }"`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub aggregate_stmt: Option<String>,
 }
 
 /// Exhaustive multi-tag classification config — see
@@ -134,6 +193,13 @@ pub struct TagSpec {
     /// generated impl (matches today's single-tag `field_attribute`
     /// behavior, generalized to N tags).
     pub exhaustive: bool,
+    /// When set, switches from N-independent-items emission to the
+    /// AGGREGATE shape (one const + one method, each populated by a
+    /// per-field-repeated fragment) — see [`AggregateSpec`]. Every
+    /// [`FieldTag`] must then set `aggregate_const_entry` +
+    /// `aggregate_stmt` (validated in `compile_to_crate`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub aggregate: Option<AggregateSpec>,
 }
 
 impl PerFieldDeriveSpec {
@@ -187,6 +253,18 @@ fn validate_field_tag(spec: Option<&TagSpec>) -> Result<(), AstError> {
         if !seen.insert(tag.name.as_str()) {
             return Err(AstError::InvalidSpec(format!(
                 "field_tag.tags[].name `{}` is declared more than once",
+                tag.name
+            )));
+        }
+        if spec.aggregate.is_some() && (tag.aggregate_const_entry.is_none() || tag.aggregate_stmt.is_none()) {
+            return Err(AstError::InvalidSpec(format!(
+                "field_tag.tags[].name `{}`: aggregate mode requires both aggregate_const_entry and aggregate_stmt",
+                tag.name
+            )));
+        }
+        if spec.aggregate.is_none() && tag.per_field_template.is_empty() {
+            return Err(AstError::InvalidSpec(format!(
+                "field_tag.tags[].name `{}`: per_field_template is required outside aggregate mode",
                 tag.name
             )));
         }
@@ -322,20 +400,34 @@ fn render_lib_rs(spec: &PerFieldDeriveSpec) -> String {
     // level rather than being enforced unrepresentable at the type
     // level (a spec author setting both is a spec smell, not something
     // this emitter needs to police beyond "field_tag wins").
-    let per_field_closure: TokenStream = match &spec.field_tag {
-        Some(tag_spec) => {
-            render_field_tag_per_field(tag_spec, &method_ident_binding, &fields_iter)
+    //
+    // `setup` builds whatever per-field collection(s) the impl body
+    // below needs; `impl_body` is the literal tokens placed inside
+    // `#impl_open { ... }`. Three shapes: today's uniform template, N
+    // independent field_tag items, or field_tag's AGGREGATE shape (one
+    // const + one method, each populated by a DIFFERENT per-field
+    // fragment collection — see `render_field_tag_aggregate`).
+    let (setup, impl_body): (TokenStream, TokenStream) = match &spec.field_tag {
+        Some(tag_spec) if tag_spec.aggregate.is_some() => {
+            render_field_tag_aggregate(tag_spec, &method_ident_binding, &fields_iter)
         }
-        None => quote! {
-            let per_field = #fields_iter.map(|f| {
-                let field_name = f.ident.as_ref().expect("named field has ident");
-                let field_ty = &f.ty;
-                #method_ident_binding
-                quote! {
-                    #per_field_body
-                }
-            });
-        },
+        Some(tag_spec) => {
+            let setup = render_field_tag_per_field(tag_spec, &method_ident_binding, &fields_iter);
+            (setup, quote! { #prelude #hash_per_field_repeat })
+        }
+        None => {
+            let setup = quote! {
+                let per_field = #fields_iter.map(|f| {
+                    let field_name = f.ident.as_ref().expect("named field has ident");
+                    let field_ty = &f.ty;
+                    #method_ident_binding
+                    quote! {
+                        #per_field_body
+                    }
+                });
+            };
+            (setup, quote! { #prelude #hash_per_field_repeat })
+        }
     };
 
     let file: TokenStream = quote! {
@@ -365,12 +457,11 @@ fn render_lib_rs(spec: &PerFieldDeriveSpec) -> String {
 
             #skip_const
 
-            #per_field_closure
+            #setup
 
             let expanded = quote! {
                 #impl_open {
-                    #prelude
-                    #hash_per_field_repeat
+                    #impl_body
                 }
             };
             TokenStream::from(expanded)
@@ -542,6 +633,263 @@ fn render_tag_arm(tag: &FieldTag, method_ident_binding: &TokenStream) -> TokenSt
     }
 }
 
+/// Builds the `(setup, impl_body)` pair for `field_tag`'s AGGREGATE
+/// shape (see [`AggregateSpec`]). `setup` accumulates two parallel
+/// `Vec<TokenStream>` (one const-array entry + one method statement per
+/// matched field) via a `for` loop (not `.map()`/`.filter_map()` — each
+/// field now contributes to TWO outputs, not one, so an explicit loop
+/// with two `.push()` calls is the natural shape). `impl_body` wraps
+/// each collection in its own `#(#entries)*`-style repetition inside
+/// the spec's `const_prelude`/`epilogue` and `method_prelude`/`epilogue`.
+fn render_field_tag_aggregate(
+    tag_spec: &TagSpec,
+    method_ident_binding: &TokenStream,
+    fields_iter: &TokenStream,
+) -> (TokenStream, TokenStream) {
+    let agg = tag_spec
+        .aggregate
+        .as_ref()
+        .expect("render_field_tag_aggregate called with aggregate.is_none()");
+
+    let tag_name_lits: Vec<&str> = tag_spec.tags.iter().map(|t| t.name.as_str()).collect();
+    let exhaustive = tag_spec.exhaustive;
+    let tag_paths: Vec<syn::Ident> = tag_spec
+        .tags
+        .iter()
+        .map(|t| format_ident!("{}", t.name))
+        .collect();
+    let match_arms: Vec<TokenStream> = tag_spec
+        .tags
+        .iter()
+        .map(|tag| render_tag_arm_aggregate(tag, method_ident_binding))
+        .collect();
+
+    let hash_msg: TokenStream = "#msg".parse().expect("static literal must parse");
+
+    let zero_match_arm: TokenStream = if exhaustive {
+        quote! {
+            0 => {
+                let msg = format!(
+                    "field `{}` must carry exactly one of: {}",
+                    field_name,
+                    [#(#tag_name_lits),*].join(", "),
+                );
+                method_stmts.push(quote::quote! { compile_error!(#hash_msg); });
+            }
+        }
+    } else {
+        quote! {
+            0 => {}
+        }
+    };
+
+    let setup: TokenStream = quote! {
+        const TAG_NAMES: &[&str] = &[#(#tag_name_lits),*];
+
+        let mut const_entries: Vec<proc_macro2::TokenStream> = Vec::new();
+        let mut method_stmts: Vec<proc_macro2::TokenStream> = Vec::new();
+
+        for f in #fields_iter {
+            let field_name = f.ident.as_ref().expect("named field has ident");
+            let field_ty = &f.ty;
+
+            let matched: Vec<&syn::Attribute> = f
+                .attrs
+                .iter()
+                .filter(|a| TAG_NAMES.iter().any(|&n| a.path().is_ident(n)))
+                .collect();
+
+            match matched.len() {
+                #zero_match_arm
+                1 => {
+                    let attr = matched[0];
+                    #(
+                        if attr.path().is_ident(stringify!(#tag_paths)) {
+                            #match_arms
+                        } else
+                    )* {
+                        unreachable!("attr matched TAG_NAMES but no tag branch handled it")
+                    }
+                }
+                _ => {
+                    let msg = format!(
+                        "field `{}` carries more than one hot-swap-style tag ({}) -- exactly one is required",
+                        field_name,
+                        matched
+                            .iter()
+                            .filter_map(|a| a.path().get_ident())
+                            .map(|i| i.to_string())
+                            .collect::<Vec<_>>()
+                            .join(", "),
+                    );
+                    method_stmts.push(quote::quote! { compile_error!(#hash_msg); });
+                }
+            }
+        }
+    };
+
+    // Every AggregateSpec string field is independently balanced-delimiter
+    // Rust (see the type's own doc comment for why) -- each parses clean
+    // as its own standalone TokenStream, no dangling bracket/brace.
+    let const_signature: TokenStream = agg
+        .const_signature
+        .parse()
+        .expect("AggregateSpec.const_signature must parse as TokenStream");
+    let method_signature: TokenStream = agg
+        .method_signature
+        .parse()
+        .expect("AggregateSpec.method_signature must parse as TokenStream");
+    let method_setup: TokenStream = agg
+        .method_setup
+        .parse()
+        .expect("AggregateSpec.method_setup must parse as TokenStream");
+    let method_return: TokenStream = agg
+        .method_return
+        .parse()
+        .expect("AggregateSpec.method_return must parse as TokenStream");
+    let hash_method_stmts: TokenStream =
+        "#(#method_stmts)*".parse().expect("static literal must parse");
+
+    // The outer `[...]`/`{...}` are built PROGRAMMATICALLY via
+    // `proc_macro2::Group` (layer-2 code, appended to `setup`) instead of
+    // splitting the bracket/brace across two separately-parsed strings —
+    // `TokenStream::parse` requires each parsed fragment to be balanced
+    // on its own; an earlier draft's `"... = &["` / `"];"` split hit a
+    // real `LexError` on real `cargo test`, not caught by inspection.
+    let build_groups: TokenStream = quote! {
+        let const_array = {
+            let bracket_group = proc_macro2::TokenTree::Group(proc_macro2::Group::new(
+                proc_macro2::Delimiter::Bracket,
+                {
+                    let mut ts = proc_macro2::TokenStream::new();
+                    for e in &const_entries {
+                        ts.extend(e.clone());
+                    }
+                    ts
+                },
+            ));
+            // `const_signature`'s type is `&'static [...]` (a slice
+            // reference) -- the bracket group alone is an array literal
+            // `[(...); N]`, which does not coerce to `&'static [...]` in
+            // const position (E0308, caught by the real e2e test, not by
+            // inspection). Prepend `&` so the value is a slice reference.
+            let mut ts = proc_macro2::TokenStream::new();
+            ts.extend(std::iter::once(proc_macro2::TokenTree::Punct(
+                proc_macro2::Punct::new('&', proc_macro2::Spacing::Alone),
+            )));
+            ts.extend(std::iter::once(bracket_group));
+            ts
+        };
+        let method_body = proc_macro2::TokenTree::Group(proc_macro2::Group::new(
+            proc_macro2::Delimiter::Brace,
+            quote::quote! { #method_setup #hash_method_stmts #method_return },
+        ));
+    };
+
+    let setup: TokenStream = quote! {
+        #setup
+        #build_groups
+    };
+
+    // `#const_array`/`#method_body` here name LAYER-2 local variables
+    // `build_groups` just declared (`let const_array = ...; let
+    // method_body = ...;`) -- same escape trick as `hash_msg`/
+    // `hash_method_stmts` above: must be spliced as LITERAL tokens, not
+    // resolved against THIS function's own scope (which has no such
+    // variables).
+    let hash_const_array: TokenStream =
+        "#const_array".parse().expect("static literal must parse");
+    let hash_method_body: TokenStream =
+        "#method_body".parse().expect("static literal must parse");
+
+    let impl_body: TokenStream = quote! {
+        #const_signature #hash_const_array ;
+        #method_signature #hash_method_body
+    };
+
+    (setup, impl_body)
+}
+
+/// One `if attr.path().is_ident(...) { ... }` arm's body for
+/// [`render_field_tag_aggregate`] — the aggregate-mode counterpart of
+/// [`render_tag_arm`]. Same required-args parsing (a `compile_error!()`
+/// per missing arg, pushed into `method_stmts` — `const_entries` gets
+/// nothing for an errored field, which is fine, the build fails either
+/// way), but ends by pushing this tag's `aggregate_const_entry` +
+/// `aggregate_stmt` fragments into the two accumulators instead of
+/// returning a single value.
+fn render_tag_arm_aggregate(tag: &FieldTag, method_ident_binding: &TokenStream) -> TokenStream {
+    let const_entry_body: TokenStream = tag
+        .aggregate_const_entry
+        .as_deref()
+        .expect("aggregate mode requires aggregate_const_entry (validated in compile_to_crate)")
+        .parse()
+        .unwrap_or_else(|e| panic!("tag `{}`'s aggregate_const_entry must parse as TokenStream: {e}", tag.name));
+    let stmt_body: TokenStream = tag
+        .aggregate_stmt
+        .as_deref()
+        .expect("aggregate mode requires aggregate_stmt (validated in compile_to_crate)")
+        .parse()
+        .unwrap_or_else(|e| panic!("tag `{}`'s aggregate_stmt must parse as TokenStream: {e}", tag.name));
+
+    let hash_msg: TokenStream = "#msg".parse().expect("static literal must parse");
+
+    if tag.required_args.is_empty() {
+        return quote! {
+            #method_ident_binding
+            const_entries.push(quote::quote! { #const_entry_body });
+            method_stmts.push(quote::quote! { #stmt_body });
+        };
+    }
+
+    let arg_idents: Vec<syn::Ident> = tag
+        .required_args
+        .iter()
+        .map(|a| format_ident!("{}", a))
+        .collect();
+    let arg_names: Vec<&str> = tag.required_args.iter().map(String::as_str).collect();
+    let tag_name = &tag.name;
+
+    quote! {
+        #( let mut #arg_idents: Option<syn::LitStr> = None; )*
+        let parse_result = attr.parse_nested_meta(|meta| {
+            #(
+                if meta.path.is_ident(#arg_names) {
+                    #arg_idents = Some(meta.value()?.parse()?);
+                    return Ok(());
+                }
+            )*
+            Ok(())
+        });
+        if let Err(e) = parse_result {
+            let msg = e.to_string();
+            method_stmts.push(quote::quote! { compile_error!(#hash_msg); });
+        } else {
+            let mut all_present = true;
+            #(
+                let #arg_idents = match #arg_idents {
+                    Some(v) => v,
+                    None => {
+                        all_present = false;
+                        syn::LitStr::new("", proc_macro2::Span::call_site())
+                    }
+                };
+            )*
+            if all_present {
+                #method_ident_binding
+                const_entries.push(quote::quote! { #const_entry_body });
+                method_stmts.push(quote::quote! { #stmt_body });
+            } else {
+                let msg = format!(
+                    "#[{}] on field `{}` is missing a required argument",
+                    #tag_name, field_name,
+                );
+                method_stmts.push(quote::quote! { compile_error!(#hash_msg); });
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -656,11 +1004,14 @@ mod tests {
             field_attribute: None,
             field_tag: Some(TagSpec {
                 exhaustive: true,
+                aggregate: None,
                 tags: vec![
                     FieldTag {
                         name: "hot_swap".into(),
                         required_args: vec![],
                         per_field_template: "(stringify!(#field_name), pleme_hotswap::HotSwapClass::Free)".into(),
+                        aggregate_const_entry: None,
+                        aggregate_stmt: None,
                     },
                     FieldTag {
                         name: "restart_required".into(),
@@ -668,6 +1019,8 @@ mod tests {
                         per_field_template:
                             "(stringify!(#field_name), pleme_hotswap::HotSwapClass::RequiresRestart { reason: #reason })"
                                 .into(),
+                        aggregate_const_entry: None,
+                        aggregate_stmt: None,
                     },
                 ],
             }),
@@ -679,6 +1032,7 @@ mod tests {
         let err = validate_field_tag(Some(&TagSpec {
             tags: vec![],
             exhaustive: true,
+            aggregate: None,
         }))
         .unwrap_err();
         assert!(matches!(err, AstError::InvalidSpec(_)));
@@ -688,16 +1042,21 @@ mod tests {
     fn validate_rejects_duplicate_tag_names() {
         let err = validate_field_tag(Some(&TagSpec {
             exhaustive: true,
+            aggregate: None,
             tags: vec![
                 FieldTag {
                     name: "hot_swap".into(),
                     required_args: vec![],
                     per_field_template: "()".into(),
+                    aggregate_const_entry: None,
+                    aggregate_stmt: None,
                 },
                 FieldTag {
                     name: "hot_swap".into(),
                     required_args: vec![],
                     per_field_template: "()".into(),
+                    aggregate_const_entry: None,
+                    aggregate_stmt: None,
                 },
             ],
         }))

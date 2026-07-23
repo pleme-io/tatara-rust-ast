@@ -8,7 +8,9 @@
 //! End-to-end coverage in `tatara-rust-test/tests/per_field_end_to_end.rs`.
 
 use tatara_rust_ast::Ident;
-use tatara_rust_derive::{FieldTag, PerFieldDeriveSpec, PerFieldTarget, TagSpec, VerificationMatrixSpec};
+use tatara_rust_derive::{
+    AggregateSpec, FieldTag, PerFieldDeriveSpec, PerFieldTarget, TagSpec, VerificationMatrixSpec,
+};
 
 /// `pleme-verification-matrix` — the farm's first test-generation
 /// primitive. Emits the dependency-free `verification_matrix!` +
@@ -113,12 +115,15 @@ pub fn hot_swap_spec() -> PerFieldDeriveSpec {
         field_attribute: None,
         field_tag: Some(TagSpec {
             exhaustive: true,
+            aggregate: None,
             tags: vec![
                 FieldTag {
                     name: "hot_swap".into(),
                     required_args: vec![],
                     per_field_template:
                         "pub fn #method_ident() -> (bool, Option<&'static str>) { (true, None) }".into(),
+                    aggregate_const_entry: None,
+                    aggregate_stmt: None,
                 },
                 FieldTag {
                     name: "restart_required".into(),
@@ -128,8 +133,76 @@ pub fn hot_swap_spec() -> PerFieldDeriveSpec {
                         "{ (false, Some(#reason)) }"
                     )
                     .into(),
+                    aggregate_const_entry: None,
+                    aggregate_stmt: None,
                 },
             ],
+        }),
+    }
+}
+
+/// `#[derive(HotSwapClassifier)]` — `field_tag`'s AGGREGATE shape (see
+/// [`AggregateSpec`]), matching the REAL target trait
+/// `theory/CALHA.md`'s `pleme-hotswap`/`pleme-hotswap-derive` crates
+/// need: `const FIELD_CLASSES` (introspection) + `fn classify_change`
+/// (comparing `self` against `new` field-by-field into ONE
+/// `SwapDecision`) — unlike [`hot_swap_spec`] above, which emits N
+/// independent per-field methods, this emits exactly TWO trait-impl
+/// items. Consumer must bring `HotSwapClass`/`SwapDecision`/
+/// `HotSwapClassifier` into scope (this spec references them
+/// unqualified, matching how a real `pleme-hotswap` consumer would
+/// `use pleme_hotswap::{HotSwapClass, SwapDecision, HotSwapClassifier};`).
+/// See `tatara-rust-test/tests/field_tag_aggregate_end_to_end.rs` for
+/// the real compiled-and-invoked proof.
+#[must_use]
+pub fn hot_swap_classifier_spec() -> PerFieldDeriveSpec {
+    PerFieldDeriveSpec {
+        trait_name: Ident::new("HotSwapClassifier"),
+        target: PerFieldTarget::NamedStruct,
+        trait_ref: Some("HotSwapClassifier".into()),
+        per_field_template: String::new(), // unused -- aggregate mode
+        method_name_template: None,
+        impl_prelude: None,
+        skip_fields: vec![],
+        field_attribute: None,
+        field_tag: Some(TagSpec {
+            exhaustive: true,
+            tags: vec![
+                FieldTag {
+                    name: "hot_swap".into(),
+                    required_args: vec![],
+                    per_field_template: String::new(),
+                    aggregate_const_entry: Some(
+                        "(stringify!(#field_name), HotSwapClass::Free),".into(),
+                    ),
+                    // A Free field changing needs no statement at all --
+                    // the default (empty reasons -> SwapDecision::Free)
+                    // already covers it. An empty template is valid
+                    // here (repeated zero times contributes nothing).
+                    aggregate_stmt: Some(String::new()),
+                },
+                FieldTag {
+                    name: "restart_required".into(),
+                    required_args: vec!["reason".into()],
+                    per_field_template: String::new(),
+                    aggregate_const_entry: Some(
+                        "(stringify!(#field_name), HotSwapClass::RequiresRestart { reason: #reason }),".into(),
+                    ),
+                    aggregate_stmt: Some(
+                        "if self.#field_name != new.#field_name { reasons.push(#reason); }".into(),
+                    ),
+                },
+            ],
+            aggregate: Some(AggregateSpec {
+                const_signature: "const FIELD_CLASSES: &'static [(&'static str, HotSwapClass)] = ".into(),
+                method_signature: "fn classify_change(&self, new: &Self) -> SwapDecision".into(),
+                method_setup: "let mut reasons: Vec<&'static str> = Vec::new();".into(),
+                method_return: concat!(
+                    "if reasons.is_empty() { SwapDecision::Free } ",
+                    "else { SwapDecision::RequiresRestart(reasons) }"
+                )
+                .into(),
+            }),
         }),
     }
 }

@@ -33,7 +33,7 @@ use tatara_rust_ast::Ident;
 use tatara_rust_catalog::{CatalogEntry, CatalogSpec, MacroCatalogSpec, VerifierHint};
 use tatara_rust_composite::CompositeDeriveSpec;
 use tatara_rust_derive::{
-    ClosedAxisSpec, EnumFoldDeriveSpec, EnumFoldTarget, FieldTag, KindRoundTripSpec,
+    AggregateSpec, ClosedAxisSpec, EnumFoldDeriveSpec, EnumFoldTarget, FieldTag, KindRoundTripSpec,
     NewtypeDeriveSpec, NewtypeTarget, PerFieldDeriveSpec, PerFieldTarget, PerVariantDeriveSpec,
     ProcDeriveSpec, TagSpec, VariantShape, VerificationMatrixSpec,
 };
@@ -509,8 +509,17 @@ fn parse_per_field_spec(items: &[SExpr]) -> Result<PerFieldDeriveSpec, ParseErro
 }
 
 /// Parses `:field-tag ( :exhaustive t :tags ( (:name "…" :required-args
-/// (…) :per-field-template "…") … ) )` into a [`TagSpec`]. Absent
-/// keyword ⇒ `Ok(None)` (today's uniform-template behavior, unchanged).
+/// (…) :per-field-template "…") … ) :aggregate ( :const-signature "…"
+/// :method-signature "…" :method-setup "…" :method-return "…" ) )`
+/// into a [`TagSpec`]. Absent keyword ⇒ `Ok(None)` (today's
+/// uniform-template behavior, unchanged). `:aggregate` is optional; when
+/// present, each tag form's `:aggregate-const-entry`/`:aggregate-stmt`
+/// are read too (both required by [`TagSpec::aggregate`]'s own
+/// spec-authoring-time validation in `compile_to_crate`, not enforced
+/// again here). Each of the four `:aggregate` fields must be
+/// independently balanced-delimiter Rust (see [`AggregateSpec`]'s own
+/// doc comment) -- the outer `[...]`/`{...}` are built programmatically
+/// by the renderer, never by splitting brackets across two fields.
 fn opt_field_tag_kw(items: &[SExpr], kw: &str) -> Result<Option<TagSpec>, ParseError> {
     let Ok(value) = find_kw_value(items, kw) else {
         return Ok(None);
@@ -534,12 +543,34 @@ fn opt_field_tag_kw(items: &[SExpr], kw: &str) -> Result<Option<TagSpec>, ParseE
             Ok(FieldTag {
                 name: expect_str_kw(form_items, "name")?,
                 required_args: opt_str_list_kw(form_items, "required-args"),
-                per_field_template: expect_str_kw(form_items, "per-field-template")?,
+                per_field_template: opt_str_kw(form_items, "per-field-template").unwrap_or_default(),
+                aggregate_const_entry: opt_str_kw(form_items, "aggregate-const-entry"),
+                aggregate_stmt: opt_str_kw(form_items, "aggregate-stmt"),
             })
         })
         .collect::<Result<Vec<FieldTag>, ParseError>>()?;
 
-    Ok(Some(TagSpec { tags, exhaustive }))
+    let aggregate = opt_aggregate_kw(outer, "aggregate")?;
+
+    Ok(Some(TagSpec { tags, exhaustive, aggregate }))
+}
+
+/// Parses `:aggregate ( :const-signature "…" :method-signature "…"
+/// :method-setup "…" :method-return "…" )` into an [`AggregateSpec`].
+/// Absent keyword ⇒ `Ok(None)`.
+fn opt_aggregate_kw(items: &[SExpr], kw: &str) -> Result<Option<AggregateSpec>, ParseError> {
+    let Ok(value) = find_kw_value(items, kw) else {
+        return Ok(None);
+    };
+    let inner = value
+        .as_list()
+        .ok_or_else(|| ParseError::ShapeError(kw.into(), "expected a list".into()))?;
+    Ok(Some(AggregateSpec {
+        const_signature: expect_str_kw(inner, "const-signature")?,
+        method_signature: expect_str_kw(inner, "method-signature")?,
+        method_setup: expect_str_kw(inner, "method-setup")?,
+        method_return: expect_str_kw(inner, "method-return")?,
+    }))
 }
 
 fn parse_per_variant_spec(items: &[SExpr]) -> Result<PerVariantDeriveSpec, ParseError> {
@@ -969,18 +1000,43 @@ fn render_field_tag(tag_spec: &TagSpec) -> String {
                     tag.required_args.iter().map(|a| SExpr::Str(a.clone())).collect(),
                 ));
             }
-            fields.push(SExpr::Kw("per-field-template".into()));
-            fields.push(SExpr::Str(tag.per_field_template.clone()));
+            // Aggregate mode leaves per_field_template empty (unused).
+            if !tag.per_field_template.is_empty() {
+                fields.push(SExpr::Kw("per-field-template".into()));
+                fields.push(SExpr::Str(tag.per_field_template.clone()));
+            }
+            if let Some(entry) = &tag.aggregate_const_entry {
+                fields.push(SExpr::Kw("aggregate-const-entry".into()));
+                fields.push(SExpr::Str(entry.clone()));
+            }
+            if let Some(stmt) = &tag.aggregate_stmt {
+                fields.push(SExpr::Kw("aggregate-stmt".into()));
+                fields.push(SExpr::Str(stmt.clone()));
+            }
             SExpr::List(fields)
         })
         .collect();
 
-    let field_tag_form = SExpr::List(vec![
+    let mut field_tag_fields = vec![
         SExpr::Kw("exhaustive".into()),
         SExpr::Sym(exhaustive_sym.into()),
         SExpr::Kw("tags".into()),
         SExpr::List(tag_exprs),
-    ]);
+    ];
+    if let Some(agg) = &tag_spec.aggregate {
+        field_tag_fields.push(SExpr::Kw("aggregate".into()));
+        field_tag_fields.push(SExpr::List(vec![
+            SExpr::Kw("const-signature".into()),
+            SExpr::Str(agg.const_signature.clone()),
+            SExpr::Kw("method-signature".into()),
+            SExpr::Str(agg.method_signature.clone()),
+            SExpr::Kw("method-setup".into()),
+            SExpr::Str(agg.method_setup.clone()),
+            SExpr::Kw("method-return".into()),
+            SExpr::Str(agg.method_return.clone()),
+        ]));
+    }
+    let field_tag_form = SExpr::List(field_tag_fields);
 
     format!("        :field-tag {}\n", render_sexpr(&field_tag_form, 4))
 }
