@@ -92,7 +92,8 @@ fn usage() -> ExitCode {
         tatara-rust-forge survey-fleet <org-root> [--threshold N] [--json] (aggregate every crate under org-root; leaderboard sorted by candidate count)\n  \
         tatara-rust-forge survey-fleet-returns <org-root> [--json] [--no-frontier] (diminishing-returns economics: per-pattern harvest/defer/stop + fleet ContinueFarming/Plateau verdict)\n  \
         tatara-rust-forge survey-fleet-apply <org-root> [--threshold N] [--write] [--no-validate] [--skip-clippy] [--no-inject-deps] [--no-stop-on-rollback] (bulk fleet adoption; per-crate atomic apply+gate+rollback)\n  \
-        tatara-rust-forge survey-fleet-validate <org-root> [--json]    (substrate self-QA: apply every fleet candidate in-memory + verify re-parse; aggregate failures by class)"
+        tatara-rust-forge survey-fleet-validate <org-root> [--json]    (substrate self-QA: apply every fleet candidate in-memory + verify re-parse; aggregate failures by class)\n  \
+        tatara-rust-forge survey-sexp-readers [<org-root>] [--json] [--file <f.rs>] (census every independent S-expression reader; diffs against the frozen catalog both directions)"
     );
     ExitCode::from(2)
 }
@@ -122,6 +123,7 @@ fn main() -> ExitCode {
         "survey-fleet-returns" => cmd_survey_fleet_returns(rest),
         "survey-fleet-apply" => cmd_survey_fleet_apply(rest),
         "survey-fleet-validate" => cmd_survey_fleet_validate(rest),
+        "survey-sexp-readers" => cmd_survey_sexp_readers(rest),
         "--help" | "-h" => {
             usage();
             return ExitCode::SUCCESS;
@@ -1332,3 +1334,164 @@ fn cmd_survey_fleet_validate(args: &[String]) -> Result<String, String> {
     ))
 }
 
+
+// ─────────────────────────────────────────────────────────────────────
+// survey-sexp-readers — the fleet's independent-S-expression-reader census
+// ─────────────────────────────────────────────────────────────────────
+
+/// Operator face for the gate in `tatara_rust_survey::sexp_readers`.
+///
+/// The census is the same code the `catalog_matches_live_fleet_census`
+/// test runs, so a red gate can be reproduced and inspected without
+/// reading a test harness's assertion dump. `--file` runs only the
+/// per-file signal detector, which is how you check whether a single
+/// candidate file would trip the gate before committing it.
+///
+/// Exit code is non-zero on drift, so this is usable as a CI step in its
+/// own right — and unlike the test, it does NOT silently succeed when the
+/// fleet root is missing: it says so and fails.
+fn cmd_survey_sexp_readers(args: &[String]) -> Result<String, String> {
+    use tatara_rust_survey::sexp_readers::{
+        census_sexp_readers, default_fleet_root, drift_against_catalog, probe_file,
+        KNOWN_BLIND_SPOTS, KNOWN_SEXP_READERS, SEXP_READER_ALLOWLIST,
+    };
+
+    let mut json = false;
+    let mut root: Option<PathBuf> = None;
+    let mut single: Option<PathBuf> = None;
+    let mut i = 0;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--json" => json = true,
+            "--file" => {
+                i += 1;
+                single = Some(PathBuf::from(
+                    args.get(i).ok_or("--file needs a path")?.clone(),
+                ));
+            }
+            other if other.starts_with("--") => {
+                return Err(format!("survey-sexp-readers: unknown flag {other}"))
+            }
+            other => root = Some(PathBuf::from(other)),
+        }
+        i += 1;
+    }
+
+    // Single-file probe: "would this file trip the gate?"
+    if let Some(f) = single {
+        let probe = probe_file(&f).map_err(|e| format!("{}: {e}", f.display()))?;
+        println!("=== tatara-rust-forge survey-sexp-readers --file ===");
+        println!("File: {}", probe.path.display());
+        println!(
+            "Clause (c) — this FILE calls the canonical reader: {} \
+             (the gate evaluates (c) across the whole crate)",
+            probe.calls_canonical_reader,
+        );
+        if probe.signals.is_empty() {
+            println!("Signals: none — this file alone would not trip the gate");
+        } else {
+            println!("Signals:");
+            for s in &probe.signals {
+                println!("  {s:?}");
+            }
+        }
+        return Ok(format!("{} signal(s)", probe.signals.len()));
+    }
+
+    let root = match root.or_else(default_fleet_root) {
+        Some(r) => r,
+        None => {
+            return Err(
+                "survey-sexp-readers: no fleet root — pass one, or set PLEME_FLEET_ROOT"
+                    .to_string(),
+            )
+        }
+    };
+
+    let census = census_sexp_readers(&root).map_err(|e| format!("census: {e}"))?;
+    let drift = drift_against_catalog(&census);
+
+    if json {
+        let payload = serde_json::json!({ "census": &census, "drift": &drift });
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&payload).map_err(|e| e.to_string())?
+        );
+    } else {
+        println!("=== tatara-rust-forge survey-sexp-readers ===");
+        println!("Root: {}", root.display());
+        println!(
+            "Scanned: {} repos / {} crates / {} files",
+            census.repos_scanned, census.crates_scanned, census.files_parsed,
+        );
+        println!(
+            "Census: {} reader file(s) across the fleet    Catalog: {} frozen entr(ies)",
+            census.findings.len(),
+            KNOWN_SEXP_READERS.len(),
+        );
+        println!("─── Census ───");
+        for f in &census.findings {
+            let known = KNOWN_SEXP_READERS
+                .iter()
+                .any(|(r, p)| *r == f.repo && *p == f.rel_path);
+            println!(
+                "  {}  {}/{}",
+                if known { "  " } else { "NEW" },
+                f.repo,
+                f.rel_path,
+            );
+            for s in &f.signals {
+                println!("        {s:?}");
+            }
+        }
+        if !census.allowlisted.is_empty() {
+            println!("─── Dismissed by SEXP_READER_ALLOWLIST ({}) ───", census.allowlisted.len());
+            for f in &census.allowlisted {
+                let why = SEXP_READER_ALLOWLIST
+                    .iter()
+                    .find(|(r, p, _)| *r == f.repo && *p == f.rel_path)
+                    .map_or("<no reason recorded>", |(_, _, w)| *w);
+                println!("  {}/{}  — {why}", f.repo, f.rel_path);
+            }
+        }
+        if !KNOWN_BLIND_SPOTS.is_empty() {
+            println!(
+                "─── Known blind spots ({}) — readers the predicate CANNOT see ───",
+                KNOWN_BLIND_SPOTS.len()
+            );
+            for (r, p, why) in KNOWN_BLIND_SPOTS {
+                println!("  {r}/{p}  — {why}");
+            }
+            println!(
+                "  (honest fleet total = {} censused + {} blind = {})",
+                census.findings.len(),
+                KNOWN_BLIND_SPOTS.len(),
+                census.findings.len() + KNOWN_BLIND_SPOTS.len(),
+            );
+        }
+        if drift.is_clean() {
+            println!("─── Catalog: CLEAN (census == KNOWN_SEXP_READERS) ───");
+        } else {
+            println!("─── Catalog DRIFT ───");
+            for f in &drift.added {
+                println!("  + NEW      {}/{}", f.repo, f.rel_path);
+            }
+            for (r, p) in &drift.consumed {
+                println!("  - CONSUMED {r}/{p}  (delete this line from KNOWN_SEXP_READERS)");
+            }
+        }
+    }
+
+    if drift.is_clean() {
+        Ok(format!(
+            "{} reader(s); catalog clean",
+            census.findings.len()
+        ))
+    } else {
+        Err(format!(
+            "catalog drift: {} new, {} consumed",
+            drift.added.len(),
+            drift.consumed.len(),
+        ))
+    }
+}

@@ -35,6 +35,7 @@ pub mod detector;
 pub mod fleet;
 pub mod pipeline;
 pub mod returns;
+pub mod sexp_readers;
 pub use apply::{apply_to_source, ApplyError};
 pub use cargo_deps::{inject_deps, CargoDepsError, DepSource, InjectOutcome};
 pub use detector::{detectors, Detector};
@@ -50,6 +51,11 @@ pub use pipeline::{
 pub use returns::{
     fleet_returns, first_party_frontier_2026_06, Decision, FleetReturnsReport, FleetVerdict,
     FrontierEstimate, LiftCostModel, PatternEconomics, Readiness,
+};
+pub use sexp_readers::{
+    census_sexp_readers, default_fleet_root, drift_against_catalog, probe_file, CatalogDrift,
+    FileProbe, ReaderSignal, SexpReaderCensus, SexpReaderFinding, KNOWN_BLIND_SPOTS,
+    KNOWN_SEXP_READERS, SEXP_READER_ALLOWLIST,
 };
 
 /// One opportunity to replace a hand-written impl with a farm derive.
@@ -180,7 +186,7 @@ pub fn survey_tree(root: &Path) -> Result<Vec<RefactorCandidate>, SurveyError> {
     Ok(out)
 }
 
-fn visit_rs_files(
+pub(crate) fn visit_rs_files(
     root: &Path,
     f: &mut dyn FnMut(&Path) -> Result<(), SurveyError>,
 ) -> Result<(), SurveyError> {
