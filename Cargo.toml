@@ -68,9 +68,10 @@ tatara-rust-verify      = { path = "crates/tatara-rust-verify", version = "0.1" 
 tatara-rust-publish     = { path = "crates/tatara-rust-publish", version = "0.1" }
 tatara-rust-survey      = { path = "crates/tatara-rust-survey", version = "0.1" }
 
-# pleme-io tatara stack
-tatara-lisp        = { git = "https://github.com/pleme-io/tatara-lisp" }
-tatara-lisp-derive = { git = "https://github.com/pleme-io/tatara-lisp" }
+# pleme-io tatara stack — canonical crates.io release. The lib re-exports the
+# derive macros renamed (DeriveTataraDomain / DeriveKeywordSexp), so consumers
+# never name tatara-lisp-derive themselves.
+tatara-lisp = "0.3.3"
 
 # Rust macro plumbing — only used by L1 emit + L3 test
 proc-macro2 = "1"

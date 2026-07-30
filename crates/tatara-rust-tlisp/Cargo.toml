@@ -1,6 +1,6 @@
 [package]
 name        = "tatara-rust-tlisp"
-description = "Tlisp authoring surface for every L2 macro Spec. Round-trips between Spec ↔ `(def<kind> …)` text. When tatara-lisp-derive is plugged in (one `#[derive(TataraDomain)]` line per Spec), these structs auto-register as Lisp authoring keywords."
+description = "Tlisp authoring surface for every L2 macro Spec. Round-trips between Spec ↔ `(def<kind> …)` text. When tatara-lisp is plugged in (one `#[derive(DeriveTataraDomain)]` line per Spec), these structs auto-register as Lisp authoring keywords."
 version      .workspace = true
 edition      .workspace = true
 rust-version .workspace = true

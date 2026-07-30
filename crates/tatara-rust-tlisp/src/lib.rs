@@ -5,13 +5,16 @@
 //!    `(defprocfn …)` / `(defmacrules …)` / `(defsuite …)` form in
 //!    tlisp; this crate's [`render_tlisp`] turns each Spec back into
 //!    that text shape (round-trip).
-//! 2. **TataraDomain registration** — when tatara-lisp-derive lands as a
-//!    dep, every Spec gets `#[derive(TataraDomain)]` + `#[tatara(keyword =
+//! 2. **TataraDomain registration** — when `tatara-lisp` lands as a dep,
+//!    every Spec gets `#[derive(DeriveTataraDomain)]` + `#[tatara(keyword =
 //!    "def…")]` in this crate. Authoring forms expand to the Spec at
-//!    compile time.
+//!    compile time. The derive macros are re-exported by `tatara-lisp`
+//!    itself, renamed — `tatara_lisp::DeriveTataraDomain` is the macro,
+//!    `tatara_lisp::TataraDomain` the trait — so the derive crate is never
+//!    named directly.
 //!
 //! Today only the rendering half ships. The derive macros land as a
-//! one-line addition per Spec once the upstream is reachable.
+//! one-line addition per Spec.
 
 use tatara_rust_ast::Ident;
 use tatara_rust_derive::ProcDeriveSpec;
