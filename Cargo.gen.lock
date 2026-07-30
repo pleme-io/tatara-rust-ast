@@ -1,6 +1,36 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "cargo_lock_sha256": "5076a8a8e084579c9b74cae325e8266a95902cc0cb093a98bfe1a3dde2178520",
+  "manifest_sha256": {
+    "Cargo.toml": "c2f9f789a26a8fbe206b8d256224c96e229935a0479acb8ea5a6c3c75e2b0b5f",
+    "crates/tatara-rust-ast/Cargo.toml": "ee8723cd9a49f19f2ac7e08d4eda1ddf3ea7e8c3fde655dd0df435ef4ef2830d",
+    "crates/tatara-rust-attr/Cargo.toml": "b12540342d1bf84907c35ea18537ad4628f0404d86ba7fdd3ff635503d789963",
+    "crates/tatara-rust-caixa/Cargo.toml": "3d7beaf65d09d9a2de198e030dd29dcd346486caddf6931a74275aba510c172d",
+    "crates/tatara-rust-catalog/Cargo.toml": "284353688ae1ac669cc672f9809f5dd15fdc43c81429ed1bfee68d497afd7b96",
+    "crates/tatara-rust-composite/Cargo.toml": "941be5b38f6ec0033eabd53a03558b3b9f9dc5c322745aba9c81d6f4e25a3231",
+    "crates/tatara-rust-derive/Cargo.toml": "0616b0ab10f8a5e887636d90928509b2ff8bcf5bdf7997757ec0084216e655ea",
+    "crates/tatara-rust-docs/Cargo.toml": "0ef909aad1e12dcf7e30778870c53054387dbd2899773a8ebdd9e0c48bfff76b",
+    "crates/tatara-rust-dsl/Cargo.toml": "a07b2c005b01e33c198cadc78f5dc69b56d015ac9b4440e37b3f7f0ed61ea98c",
+    "crates/tatara-rust-emit/Cargo.toml": "67c2bd7d3372f372d56dcf69ba654196b92a883f44b933f4dca8145f5a6a8da6",
+    "crates/tatara-rust-examples/Cargo.toml": "5635364402fa1f5c701ce37a5f58d22521c72156829ae8232bd30dce7070098a",
+    "crates/tatara-rust-flake/Cargo.toml": "77b90ba7f27d9054f5c11f6f732ebd72b4f9ef89964a5ad4896a3fd9ad9f5687",
+    "crates/tatara-rust-forge/Cargo.toml": "e1dbe4f4d08e59e0f7fdb7ee228daa17646c7200cc9c11d85c9429097c38bd38",
+    "crates/tatara-rust-gate/Cargo.toml": "8ee22e12368d51da789978f9ed74335a2bfc3e8b9c77b8ce2023c508af2660e9",
+    "crates/tatara-rust-macro-rules/Cargo.toml": "db7eef5c739957ae0c1af17d05dfd9c7ffebc7009bc1984d2ece8d1678bdca1d",
+    "crates/tatara-rust-parse/Cargo.toml": "ad676a3edbb0ebaade9882d203947ff1aef667fa7fd4ddc83d6175c4df6909d9",
+    "crates/tatara-rust-proc-attr/Cargo.toml": "900d69d1025a510740d8b570f2cdffda69757adc36aa8987d6c51a3f930904f8",
+    "crates/tatara-rust-proc-fn/Cargo.toml": "5f16e698ce4b5d12102a8f57e1ce4d6f9d22847c8d3bef9616d6365fd9616356",
+    "crates/tatara-rust-proptest/Cargo.toml": "01deeda93aa036f6cd5d25ac1e6ab0aeed32a2a73bb0073012d56fb7e01bae51",
+    "crates/tatara-rust-publish/Cargo.toml": "016427afe18adf52843606570fce6dbc7cae8fbabf0265d1eef3b3105fc5031c",
+    "crates/tatara-rust-repo/Cargo.toml": "af95b68379da7cd7302dd451cdafffbe525de3151667e550a3a149c9eeaddee9",
+    "crates/tatara-rust-snapshot/Cargo.toml": "6c8d73cbab2cf58f60d4800ea5c6943ff0a54e0fc0574ff1eab24ad27f10fa43",
+    "crates/tatara-rust-suite/Cargo.toml": "19c40e8337f61ae21d4176d344d784dbebb5f4e94e7a5715a71319d8e9700c36",
+    "crates/tatara-rust-survey/Cargo.toml": "920c2cac6a78e587637acc6f5b37b657252bfd1f84b70e1d6dc84c49fc57805a",
+    "crates/tatara-rust-test/Cargo.toml": "ecec1a8635dbb1bb504f4e2ac4d44921fdfba0f1a0e38fd8099b4e8ca1d02cbc",
+    "crates/tatara-rust-tlisp/Cargo.toml": "01aa9309fb515472ce820e8403f4fa48530d314336c1344191a0b0ff8e99305f",
+    "crates/tatara-rust-validate/Cargo.toml": "16db36cfd8e75e886223bd5a88c346d51d5ff19a75afc77cea1b43ab98584c5b",
+    "crates/tatara-rust-verify/Cargo.toml": "ab73f20dedc8a3f49326e0c1edd19bf36be285a321894fc2f72fa06d44bba41a"
+  },
   "target_resolves": {
     "base": {
       "autocfg-1.5.1": {
