@@ -440,7 +440,7 @@ dependencies = [
 
 [[package]]
 name = "tatara-rust-ast"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "indexmap",
  "insta",
@@ -457,7 +457,7 @@ dependencies = [
 
 [[package]]
 name = "tatara-rust-attr"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "serde",
  "serde_json",
@@ -467,14 +467,14 @@ dependencies = [
 
 [[package]]
 name = "tatara-rust-caixa"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "tatara-rust-ast",
 ]
 
 [[package]]
 name = "tatara-rust-catalog"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "serde",
  "serde_json",
@@ -492,7 +492,7 @@ dependencies = [
 
 [[package]]
 name = "tatara-rust-composite"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "serde",
  "serde_json",
@@ -503,7 +503,7 @@ dependencies = [
 
 [[package]]
 name = "tatara-rust-derive"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "indexmap",
  "insta",
@@ -523,7 +523,7 @@ dependencies = [
 
 [[package]]
 name = "tatara-rust-docs"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "serde_json",
  "tatara-rust-catalog",
@@ -532,7 +532,7 @@ dependencies = [
 
 [[package]]
 name = "tatara-rust-dsl"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "tatara-rust-ast",
  "tatara-rust-derive",
@@ -540,7 +540,7 @@ dependencies = [
 
 [[package]]
 name = "tatara-rust-emit"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "prettyplease",
  "proc-macro2",
@@ -553,7 +553,7 @@ dependencies = [
 
 [[package]]
 name = "tatara-rust-examples"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "serde_json",
  "tatara-rust-ast",
@@ -564,14 +564,14 @@ dependencies = [
 
 [[package]]
 name = "tatara-rust-flake"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "tatara-rust-ast",
 ]
 
 [[package]]
 name = "tatara-rust-forge"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "serde",
  "serde_json",
@@ -595,7 +595,7 @@ dependencies = [
 
 [[package]]
 name = "tatara-rust-gate"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "serde",
  "thiserror",
@@ -603,7 +603,7 @@ dependencies = [
 
 [[package]]
 name = "tatara-rust-macro-rules"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "serde",
  "serde_json",
@@ -613,7 +613,7 @@ dependencies = [
 
 [[package]]
 name = "tatara-rust-parse"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -623,7 +623,7 @@ dependencies = [
 
 [[package]]
 name = "tatara-rust-proc-attr"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "serde",
  "serde_json",
@@ -633,7 +633,7 @@ dependencies = [
 
 [[package]]
 name = "tatara-rust-proc-fn"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "serde",
  "serde_json",
@@ -643,7 +643,7 @@ dependencies = [
 
 [[package]]
 name = "tatara-rust-proptest"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "proptest",
  "tatara-rust-ast",
@@ -653,7 +653,7 @@ dependencies = [
 
 [[package]]
 name = "tatara-rust-publish"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "serde",
  "thiserror",
@@ -661,7 +661,7 @@ dependencies = [
 
 [[package]]
 name = "tatara-rust-repo"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "serde",
  "serde_json",
@@ -672,7 +672,7 @@ dependencies = [
 
 [[package]]
 name = "tatara-rust-snapshot"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "insta",
  "proc-macro2",
@@ -684,7 +684,7 @@ dependencies = [
 
 [[package]]
 name = "tatara-rust-suite"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "serde",
  "serde_json",
@@ -698,7 +698,7 @@ dependencies = [
 
 [[package]]
 name = "tatara-rust-survey"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "prettyplease",
  "proc-macro2",
@@ -712,7 +712,7 @@ dependencies = [
 
 [[package]]
 name = "tatara-rust-test"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "insta",
  "proptest",
@@ -735,7 +735,7 @@ dependencies = [
 
 [[package]]
 name = "tatara-rust-tlisp"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "serde",
  "serde_json",
@@ -752,7 +752,7 @@ dependencies = [
 
 [[package]]
 name = "tatara-rust-validate"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "serde",
  "serde_json",
@@ -767,7 +767,7 @@ dependencies = [
 
 [[package]]
 name = "tatara-rust-verify"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "prettyplease",
  "proc-macro2",
