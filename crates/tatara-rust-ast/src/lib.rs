@@ -22,12 +22,14 @@ pub mod cargo;
 pub mod cargo_manifest;
 pub mod error;
 pub mod from_syn;
+pub mod item;
 pub mod scaffold;
 pub mod traits;
 
 pub use cargo::render_proc_macro_cargo_toml;
 pub use cargo_manifest::{CargoManifest, Dep, DetailedDep, Lib, Package};
 pub use error::AstError;
+pub use item::{File, InnerAttr, Item, Visibility};
 pub use scaffold::{CrateScaffold, FileEntry};
 pub use traits::{CompileToCrate, FromSyn, ToRustTokens};
 
@@ -235,6 +237,142 @@ pub enum Expr {
     /// interior text of the `quote!{}`. Used inside derive-macro fn bodies
     /// to defer to `proc_macro2`'s splicing.
     QuoteTemplate { tokens: String },
+
+    // ── Typed control flow and arithmetic (0.1.8). Unlike `Literal`, none of
+    // these carries source text: every one renders from typed parts, so a
+    // compiler emitting through them cannot produce malformed Rust.
+    /// An integer literal with an optional type suffix: `3u32`, `0x10`.
+    Int {
+        value: u64,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        suffix: Option<IntSuffix>,
+    },
+    /// `true` or `false`.
+    Bool { value: bool },
+    /// A call to a path: `f(a, b)`, `core::mem::swap(a, b)`.
+    Call { func: Vec<Ident>, args: Vec<Expr> },
+    /// `lhs op rhs`, parenthesised so precedence is the tree's.
+    Binary {
+        op: BinOp,
+        lhs: Box<Expr>,
+        rhs: Box<Expr>,
+    },
+    /// `!e` or `-e`.
+    Unary { op: UnOp, expr: Box<Expr> },
+    /// `if cond { … } else { … }`.
+    If {
+        cond: Box<Expr>,
+        then_branch: Block,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        else_branch: Option<Block>,
+    },
+    /// `loop { … }`.
+    Loop { body: Block },
+    /// `break`.
+    Break,
+    /// `continue`.
+    Continue,
+    /// `return` or `return e`.
+    Return {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        value: Option<Box<Expr>>,
+    },
+    /// `name = value` (the target is a local).
+    Assign { target: Ident, value: Box<Expr> },
+    /// A block used as an expression: `{ … }`.
+    Block { block: Block },
+}
+
+/// The suffix of an integer literal, which fixes its type.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum IntSuffix {
+    U8,
+    U16,
+    U32,
+    U64,
+    Usize,
+    I8,
+    I16,
+    I32,
+    I64,
+    Isize,
+}
+
+impl IntSuffix {
+    /// The suffix as Rust spells it.
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::U8 => "u8",
+            Self::U16 => "u16",
+            Self::U32 => "u32",
+            Self::U64 => "u64",
+            Self::Usize => "usize",
+            Self::I8 => "i8",
+            Self::I16 => "i16",
+            Self::I32 => "i32",
+            Self::I64 => "i64",
+            Self::Isize => "isize",
+        }
+    }
+}
+
+/// A binary operator.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum BinOp {
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Rem,
+    Eq,
+    Ne,
+    Lt,
+    Le,
+    Gt,
+    Ge,
+    And,
+    Or,
+    BitAnd,
+    BitOr,
+    BitXor,
+    Shl,
+    Shr,
+}
+
+impl ToRustTokens for BinOp {
+    fn to_rust_tokens(&self) -> TokenStream {
+        match self {
+            Self::Add => quote!(+),
+            Self::Sub => quote!(-),
+            Self::Mul => quote!(*),
+            Self::Div => quote!(/),
+            Self::Rem => quote!(%),
+            Self::Eq => quote!(==),
+            Self::Ne => quote!(!=),
+            Self::Lt => quote!(<),
+            Self::Le => quote!(<=),
+            Self::Gt => quote!(>),
+            Self::Ge => quote!(>=),
+            Self::And => quote!(&&),
+            Self::Or => quote!(||),
+            Self::BitAnd => quote!(&),
+            Self::BitOr => quote!(|),
+            Self::BitXor => quote!(^),
+            Self::Shl => quote!(<<),
+            Self::Shr => quote!(>>),
+        }
+    }
+}
+
+/// A unary operator.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum UnOp {
+    Not,
+    Neg,
 }
 
 impl ToRustTokens for Expr {
@@ -270,6 +408,70 @@ impl ToRustTokens for Expr {
                 let body: TokenStream = tokens.parse().unwrap_or_else(|_| quote!());
                 quote!(quote::quote! { #body })
             }
+            Self::Int { value, suffix } => {
+                let text = match suffix {
+                    None => value.to_string(),
+                    Some(s) => format!("{value}{}", s.as_str()),
+                };
+                let lit = syn::LitInt::new(&text, proc_macro2::Span::call_site());
+                quote!(#lit)
+            }
+            Self::Bool { value } => {
+                if *value {
+                    quote!(true)
+                } else {
+                    quote!(false)
+                }
+            }
+            Self::Call { func, args } => {
+                let segs: Vec<_> = func.iter().map(ToRustTokens::to_rust_tokens).collect();
+                let a = args.iter().map(ToRustTokens::to_rust_tokens);
+                quote!( #(#segs)::*(#(#a),*) )
+            }
+            Self::Binary { op, lhs, rhs } => {
+                let (o, l, r) = (op.to_rust_tokens(), lhs.to_rust_tokens(), rhs.to_rust_tokens());
+                quote!((#l #o #r))
+            }
+            Self::Unary { op, expr } => {
+                let e = expr.to_rust_tokens();
+                match op {
+                    UnOp::Not => quote!((!#e)),
+                    UnOp::Neg => quote!((-#e)),
+                }
+            }
+            Self::If {
+                cond,
+                then_branch,
+                else_branch,
+            } => {
+                let c = cond.to_rust_tokens();
+                let t = then_branch.to_rust_tokens();
+                match else_branch {
+                    None => quote!(if #c #t),
+                    Some(e) => {
+                        let e = e.to_rust_tokens();
+                        quote!(if #c #t else #e)
+                    }
+                }
+            }
+            Self::Loop { body } => {
+                let b = body.to_rust_tokens();
+                quote!(loop #b)
+            }
+            Self::Break => quote!(break),
+            Self::Continue => quote!(continue),
+            Self::Return { value } => match value {
+                None => quote!(return),
+                Some(v) => {
+                    let v = v.to_rust_tokens();
+                    quote!(return #v)
+                }
+            },
+            Self::Assign { target, value } => {
+                let (t, v) = (target.to_rust_tokens(), value.to_rust_tokens());
+                quote!(#t = #v)
+            }
+            Self::Block { block } => block.to_rust_tokens(),
         }
     }
 }
@@ -281,6 +483,15 @@ pub enum Stmt {
     Let { name: Ident, value: Expr },
     Semi { expr: Expr },
     Tail { expr: Expr },
+    /// `let [mut] name[: ty] = value;` (0.1.8).
+    Local {
+        name: Ident,
+        #[serde(default)]
+        mutable: bool,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        ty: Option<TypeRef>,
+        value: Expr,
+    },
 }
 
 impl ToRustTokens for Stmt {
@@ -296,6 +507,23 @@ impl ToRustTokens for Stmt {
                 quote!(#e;)
             }
             Self::Tail { expr } => expr.to_rust_tokens(),
+            Self::Local {
+                name,
+                mutable,
+                ty,
+                value,
+            } => {
+                let n = name.to_rust_tokens();
+                let v = value.to_rust_tokens();
+                let m = if *mutable { quote!(mut) } else { quote!() };
+                match ty {
+                    None => quote!(let #m #n = #v;),
+                    Some(t) => {
+                        let t = t.to_rust_tokens();
+                        quote!(let #m #n: #t = #v;)
+                    }
+                }
+            }
         }
     }
 }
