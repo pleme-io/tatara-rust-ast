@@ -16,9 +16,7 @@ quote           .workspace = true
 syn             .workspace = true
 prettyplease    .workspace = true
 thiserror       .workspace = true
+serde_json      .workspace = true
 
 [lints]
 workspace = true
-
-[dev-dependencies]
-serde_json .workspace = true

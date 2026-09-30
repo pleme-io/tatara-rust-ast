@@ -11,7 +11,7 @@
     "crates/tatara-rust-derive/Cargo.toml": "0616b0ab10f8a5e887636d90928509b2ff8bcf5bdf7997757ec0084216e655ea",
     "crates/tatara-rust-docs/Cargo.toml": "0ef909aad1e12dcf7e30778870c53054387dbd2899773a8ebdd9e0c48bfff76b",
     "crates/tatara-rust-dsl/Cargo.toml": "a07b2c005b01e33c198cadc78f5dc69b56d015ac9b4440e37b3f7f0ed61ea98c",
-    "crates/tatara-rust-emit/Cargo.toml": "7d1ead69f4e3b5e8b7e4ffeaa1f0a5f6ee17b2ffce95812df06cbc11a60e83ab",
+    "crates/tatara-rust-emit/Cargo.toml": "830c6a9a7e6783c66673008104b2028c812b12293a4b343fcc2fda2051d2b351",
     "crates/tatara-rust-examples/Cargo.toml": "5635364402fa1f5c701ce37a5f58d22521c72156829ae8232bd30dce7070098a",
     "crates/tatara-rust-flake/Cargo.toml": "77b90ba7f27d9054f5c11f6f732ebd72b4f9ef89964a5ad4896a3fd9ad9f5687",
     "crates/tatara-rust-forge/Cargo.toml": "e1dbe4f4d08e59e0f7fdb7ee228daa17646c7200cc9c11d85c9429097c38bd38",
@@ -1610,6 +1610,16 @@
           {
             "name": "quote",
             "package_key": "quote-1.0.45",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "serde_json",
+            "package_key": "serde_json-1.0.150",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -4088,7 +4098,13 @@
       "lib_target": {
         "name": "tatara_rust_emit",
         "path": "src/lib.rs"
-      }
+      },
+      "binaries": [
+        {
+          "name": "tatara-rust-emit",
+          "path": "src/bin/tatara-rust-emit.rs"
+        }
+      ]
     },
     "tatara-rust-examples-0.1.8": {
       "edition": "2024",
