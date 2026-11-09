@@ -103,8 +103,7 @@ pub struct PerFieldDeriveSpec {
 /// [`FieldTag::aggregate_stmt`]: a `const` whose array literal holds one
 /// entry per field, and a method whose body accumulates one statement
 /// per field. This is the shape a real classification trait needs (e.g.
-/// `HotSwapClassifier::{FIELD_CLASSES, classify_change}`,
-/// `theory/CALHA.md` §4) — comparing `self` against `new` field-by-field
+/// `HotSwapClassifier::{FIELD_CLASSES, classify_change}`) — comparing `self` against `new` field-by-field
 /// inside ONE method, not N separate ones.
 ///
 /// **Every field here MUST be independently balanced-delimiter Rust
@@ -138,8 +137,7 @@ pub struct AggregateSpec {
     pub method_return: String,
 }
 
-/// One named field-classification tag (`theory/CALHA.md` §4/§6.1's
-/// `field_tag`/`TagSpec`, e.g. `["hot_swap", "restart_required"]`).
+/// One named field-classification tag (`field_tag`/`TagSpec`, e.g. `["hot_swap", "restart_required"]`).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FieldTag {
     /// The consumer-side attribute name, e.g. `"hot_swap"` or
@@ -988,7 +986,7 @@ mod tests {
     }
 
     // ── field_tag (exhaustive multi-tag classification) ─────────────────
-    // The shape `theory/CALHA.md` §4/§6.1/§6.2 names: a `HotSwap` derive
+    // The shape calha's hot-swap classification needs: a `HotSwap` derive
     // with `#[hot_swap]` (no args) and `#[restart_required(reason = "...")]`
     // (one required arg), exhaustive over every field.
 

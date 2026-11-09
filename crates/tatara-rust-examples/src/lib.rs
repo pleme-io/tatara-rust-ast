@@ -88,7 +88,7 @@ pub fn setter_all_spec() -> PerFieldDeriveSpec {
 /// (is-hot-swappable, restart reason), via [`PerFieldDeriveSpec::method_name_template`]
 /// (already wired to apply uniformly across `field_tag` mode's tags too,
 /// same as the non-`field_tag` derives below). This is the SAME
-/// mechanism `theory/CALHA.md`'s real `pleme-hotswap`/`pleme-hotswap-derive`
+/// mechanism calha's real `pleme-hotswap`/`pleme-hotswap-derive`
 /// crates target — proven here against a generic, dependency-free shape
 /// first (per Care #1: ground the mechanism before wiring the specific
 /// consumer). See `tatara-rust-test/tests/field_tag_end_to_end.rs` for the
@@ -143,7 +143,7 @@ pub fn hot_swap_spec() -> PerFieldDeriveSpec {
 
 /// `#[derive(HotSwapClassifier)]` — `field_tag`'s AGGREGATE shape (see
 /// [`AggregateSpec`]), matching the REAL target trait
-/// `theory/CALHA.md`'s `pleme-hotswap`/`pleme-hotswap-derive` crates
+/// calha's `pleme-hotswap`/`pleme-hotswap-derive` crates
 /// need: `const FIELD_CLASSES` (introspection) + `fn classify_change`
 /// (comparing `self` against `new` field-by-field into ONE
 /// `SwapDecision`) — unlike [`hot_swap_spec`] above, which emits N

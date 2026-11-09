@@ -1,5 +1,5 @@
 //! End-to-end of `field_tag` (exhaustive multi-tag classification) — the
-//! `theory/CALHA.md` §4/§6.1/§6.2 engine extension. Materializes the
+//! hot-swap classification engine extension. Materializes the
 //! `hot_swap_spec()` derive crate + TWO consumers: one where every field
 //! is correctly tagged (must compile AND behave correctly), one with a
 //! deliberately untagged field (must FAIL to compile, with the expected

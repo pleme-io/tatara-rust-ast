@@ -1,5 +1,5 @@
 //! End-to-end of `field_tag`'s AGGREGATE shape (`AggregateSpec`) — the
-//! `HotSwapClassifier` trait-impl shape `theory/CALHA.md`'s real
+//! `HotSwapClassifier` trait-impl shape calha's real
 //! `pleme-hotswap`/`pleme-hotswap-derive` crates need: one `const
 //! FIELD_CLASSES` + one `classify_change` method spanning ALL fields,
 //! not N independent per-field items (that's `field_tag_end_to_end.rs`).
