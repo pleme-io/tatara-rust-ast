@@ -29,7 +29,7 @@ pub mod traits;
 pub use cargo::render_proc_macro_cargo_toml;
 pub use cargo_manifest::{CargoManifest, Dep, DetailedDep, Lib, Package};
 pub use error::AstError;
-pub use item::{File, InnerAttr, Item, Visibility};
+pub use item::{File, InnerAttr, Item, StructField, Variant, Visibility};
 pub use scaffold::{CrateScaffold, FileEntry};
 pub use traits::{CompileToCrate, FromSyn, ToRustTokens};
 
@@ -229,10 +229,7 @@ pub enum Expr {
     },
     /// Macro invocation — `format!("...", x)`. Stored as raw token text
     /// because macros are arbitrary; downstream re-parses with `syn`.
-    MacroCall {
-        path: Vec<Ident>,
-        tokens: String,
-    },
+    MacroCall { path: Vec<Ident>, tokens: String },
     /// A `quote!{}` template — escape hatch for emission. `tokens` is the
     /// interior text of the `quote!{}`. Used inside derive-macro fn bodies
     /// to defer to `proc_macro2`'s splicing.
@@ -281,6 +278,163 @@ pub enum Expr {
     Assign { target: Ident, value: Box<Expr> },
     /// A block used as an expression: `{ … }`.
     Block { block: Block },
+
+    /// A signed integer literal: `-5i64` renders `(-5i64)`, so a method
+    /// call on it applies to the whole value; `i64::MIN` renders.
+    SignedInt {
+        value: i64,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        suffix: Option<IntSuffix>,
+    },
+    /// A field of a value: `base.field`.
+    Field { base: Box<Expr>, field: Ident },
+    /// A struct or struct-variant literal: `Shape::Circle { r: e }`.
+    StructLit {
+        path: Vec<Ident>,
+        #[serde(default)]
+        fields: Vec<FieldInit>,
+    },
+    /// `match scrutinee { pattern [if guard] => body, … }`.
+    Match {
+        scrutinee: Box<Expr>,
+        arms: Vec<Arm>,
+    },
+    /// `&e` or `&mut e`.
+    Ref {
+        #[serde(default)]
+        mutable: bool,
+        expr: Box<Expr>,
+    },
+    /// `*e`.
+    Deref { expr: Box<Expr> },
+}
+
+/// One field of a struct literal: `name: value`.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FieldInit {
+    pub name: Ident,
+    pub value: Expr,
+}
+
+/// One arm of a `match`.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Arm {
+    pub pattern: Pattern,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub guard: Option<Expr>,
+    pub body: Expr,
+}
+
+/// One field of a struct pattern: `name: pattern`.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FieldPat {
+    pub name: Ident,
+    pub pattern: Pattern,
+}
+
+/// A pattern, typed: no pattern is carried as source text.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub enum Pattern {
+    /// `_`.
+    Wild,
+    /// `name`, `ref name` or `mut name`.
+    Bind {
+        name: Ident,
+        #[serde(default)]
+        by_ref: bool,
+        #[serde(default)]
+        mutable: bool,
+    },
+    /// A signed integer literal pattern: `3i64`, `-1i64`.
+    Int {
+        value: i64,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        suffix: Option<IntSuffix>,
+    },
+    /// A path: a unit variant or a constant, `Shape::Empty`.
+    Path { segments: Vec<Ident> },
+    /// `Path { a: p, b: p [, ..] }`.
+    Struct {
+        path: Vec<Ident>,
+        #[serde(default)]
+        fields: Vec<FieldPat>,
+        #[serde(default)]
+        rest: bool,
+    },
+    /// `Path(p, p)`.
+    TupleStruct {
+        path: Vec<Ident>,
+        elems: Vec<Pattern>,
+    },
+}
+
+fn int_literal(magnitude: u64, suffix: Option<IntSuffix>) -> TokenStream {
+    let text = match suffix {
+        None => magnitude.to_string(),
+        Some(s) => format!("{magnitude}{}", s.as_str()),
+    };
+    let lit = syn::LitInt::new(&text, proc_macro2::Span::call_site());
+    quote!(#lit)
+}
+
+fn path_tokens(segments: &[Ident]) -> TokenStream {
+    let segs: Vec<_> = segments.iter().map(ToRustTokens::to_rust_tokens).collect();
+    quote!( #(#segs)::* )
+}
+
+impl ToRustTokens for Pattern {
+    fn to_rust_tokens(&self) -> TokenStream {
+        match self {
+            Self::Wild => quote!(_),
+            Self::Bind {
+                name,
+                by_ref,
+                mutable,
+            } => {
+                let n = name.to_rust_tokens();
+                let r = if *by_ref { quote!(ref) } else { quote!() };
+                let m = if *mutable { quote!(mut) } else { quote!() };
+                quote!(#r #m #n)
+            }
+            Self::Int { value, suffix } => {
+                let lit = int_literal(value.unsigned_abs(), *suffix);
+                if *value < 0 { quote!(-#lit) } else { lit }
+            }
+            Self::Path { segments } => path_tokens(segments),
+            Self::Struct { path, fields, rest } => {
+                let p = path_tokens(path);
+                let f = fields.iter().map(|fp| {
+                    let (n, pat) = (fp.name.to_rust_tokens(), fp.pattern.to_rust_tokens());
+                    quote!(#n: #pat)
+                });
+                if *rest {
+                    quote!(#p { #(#f,)* .. })
+                } else {
+                    quote!(#p { #(#f),* })
+                }
+            }
+            Self::TupleStruct { path, elems } => {
+                let p = path_tokens(path);
+                let e = elems.iter().map(ToRustTokens::to_rust_tokens);
+                quote!(#p(#(#e),*))
+            }
+        }
+    }
+}
+
+impl ToRustTokens for Arm {
+    fn to_rust_tokens(&self) -> TokenStream {
+        let p = self.pattern.to_rust_tokens();
+        let b = self.body.to_rust_tokens();
+        match &self.guard {
+            None => quote!(#p => #b,),
+            Some(g) => {
+                let g = g.to_rust_tokens();
+                quote!(#p if #g => #b,)
+            }
+        }
+    }
 }
 
 /// The suffix of an integer literal, which fixes its type.
@@ -408,14 +562,7 @@ impl ToRustTokens for Expr {
                 let body: TokenStream = tokens.parse().unwrap_or_else(|_| quote!());
                 quote!(quote::quote! { #body })
             }
-            Self::Int { value, suffix } => {
-                let text = match suffix {
-                    None => value.to_string(),
-                    Some(s) => format!("{value}{}", s.as_str()),
-                };
-                let lit = syn::LitInt::new(&text, proc_macro2::Span::call_site());
-                quote!(#lit)
-            }
+            Self::Int { value, suffix } => int_literal(*value, *suffix),
             Self::Bool { value } => {
                 if *value {
                     quote!(true)
@@ -429,7 +576,11 @@ impl ToRustTokens for Expr {
                 quote!( #(#segs)::*(#(#a),*) )
             }
             Self::Binary { op, lhs, rhs } => {
-                let (o, l, r) = (op.to_rust_tokens(), lhs.to_rust_tokens(), rhs.to_rust_tokens());
+                let (o, l, r) = (
+                    op.to_rust_tokens(),
+                    lhs.to_rust_tokens(),
+                    rhs.to_rust_tokens(),
+                );
                 quote!((#l #o #r))
             }
             Self::Unary { op, expr } => {
@@ -472,6 +623,39 @@ impl ToRustTokens for Expr {
                 quote!(#t = #v)
             }
             Self::Block { block } => block.to_rust_tokens(),
+            Self::SignedInt { value, suffix } => {
+                let lit = int_literal(value.unsigned_abs(), *suffix);
+                if *value < 0 { quote!((-#lit)) } else { lit }
+            }
+            Self::Field { base, field } => {
+                let (b, f) = (base.to_rust_tokens(), field.to_rust_tokens());
+                quote!(#b.#f)
+            }
+            Self::StructLit { path, fields } => {
+                let p = path_tokens(path);
+                let f = fields.iter().map(|fi| {
+                    let (n, v) = (fi.name.to_rust_tokens(), fi.value.to_rust_tokens());
+                    quote!(#n: #v)
+                });
+                quote!(#p { #(#f),* })
+            }
+            Self::Match { scrutinee, arms } => {
+                let s = scrutinee.to_rust_tokens();
+                let a = arms.iter().map(ToRustTokens::to_rust_tokens);
+                quote!(match #s { #(#a)* })
+            }
+            Self::Ref { mutable, expr } => {
+                let e = expr.to_rust_tokens();
+                if *mutable {
+                    quote!((&mut #e))
+                } else {
+                    quote!((&#e))
+                }
+            }
+            Self::Deref { expr } => {
+                let e = expr.to_rust_tokens();
+                quote!((*#e))
+            }
         }
     }
 }
@@ -480,9 +664,16 @@ impl ToRustTokens for Expr {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
 pub enum Stmt {
-    Let { name: Ident, value: Expr },
-    Semi { expr: Expr },
-    Tail { expr: Expr },
+    Let {
+        name: Ident,
+        value: Expr,
+    },
+    Semi {
+        expr: Expr,
+    },
+    Tail {
+        expr: Expr,
+    },
     /// `let [mut] name[: ty] = value;` (0.1.8).
     Local {
         name: Ident,

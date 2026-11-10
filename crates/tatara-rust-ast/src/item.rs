@@ -72,6 +72,82 @@ pub enum Item {
         ty: TypeRef,
         value: Expr,
     },
+    /// `#[derive(…)] [vis] struct Name { field: T, … }` (0.1.11).
+    Struct {
+        #[serde(default)]
+        vis: Visibility,
+        name: Ident,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        derives: Vec<Ident>,
+        #[serde(default)]
+        fields: Vec<StructField>,
+    },
+    /// `#[derive(…)] [vis] enum Name { Unit, Named { field: T }, … }`
+    /// (0.1.11). Each variant holds only its own fields, so a value is as
+    /// large as its largest variant and no larger.
+    Enum {
+        #[serde(default)]
+        vis: Visibility,
+        name: Ident,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        derives: Vec<Ident>,
+        variants: Vec<Variant>,
+    },
+}
+
+/// A named field of a struct or a struct variant.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StructField {
+    #[serde(default)]
+    pub vis: Visibility,
+    pub name: Ident,
+    pub ty: TypeRef,
+}
+
+impl ToRustTokens for StructField {
+    fn to_rust_tokens(&self) -> TokenStream {
+        let (v, n, t) = (
+            self.vis.to_rust_tokens(),
+            self.name.to_rust_tokens(),
+            self.ty.to_rust_tokens(),
+        );
+        quote!(#v #n: #t)
+    }
+}
+
+/// An enum variant: a struct variant when it names fields, a tuple variant
+/// when it lists element types, else a unit variant. Naming both is refused
+/// when the file is emitted.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Variant {
+    pub name: Ident,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub fields: Vec<StructField>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub elems: Vec<TypeRef>,
+}
+
+impl ToRustTokens for Variant {
+    fn to_rust_tokens(&self) -> TokenStream {
+        let n = self.name.to_rust_tokens();
+        let f = self.fields.iter().map(ToRustTokens::to_rust_tokens);
+        let e = self.elems.iter().map(ToRustTokens::to_rust_tokens);
+        match (self.fields.is_empty(), self.elems.is_empty()) {
+            (true, true) => quote!(#n),
+            (false, true) => quote!(#n { #(#f),* }),
+            (true, false) => quote!(#n(#(#e),*)),
+            (false, false) => quote!(#n { #(#f),* } (#(#e),*)),
+        }
+    }
+}
+
+fn derive_tokens(derives: &[Ident]) -> TokenStream {
+    if derives.is_empty() {
+        quote!()
+    } else {
+        let d = derives.iter().map(ToRustTokens::to_rust_tokens);
+        quote!(#[derive(#(#d),*)])
+    }
 }
 
 impl ToRustTokens for Item {
@@ -95,6 +171,34 @@ impl ToRustTokens for Item {
                     value.to_rust_tokens(),
                 );
                 quote!(#v const #n: #t = #e;)
+            }
+            Self::Struct {
+                vis,
+                name,
+                derives,
+                fields,
+            } => {
+                let (d, v, n) = (
+                    derive_tokens(derives),
+                    vis.to_rust_tokens(),
+                    name.to_rust_tokens(),
+                );
+                let f = fields.iter().map(ToRustTokens::to_rust_tokens);
+                quote!(#d #v struct #n { #(#f),* })
+            }
+            Self::Enum {
+                vis,
+                name,
+                derives,
+                variants,
+            } => {
+                let (d, v, n) = (
+                    derive_tokens(derives),
+                    vis.to_rust_tokens(),
+                    name.to_rust_tokens(),
+                );
+                let vs = variants.iter().map(ToRustTokens::to_rust_tokens);
+                quote!(#d #v enum #n { #(#vs),* })
             }
         }
     }
