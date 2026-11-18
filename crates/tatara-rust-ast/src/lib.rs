@@ -307,6 +307,9 @@ pub enum Expr {
     },
     /// `*e`.
     Deref { expr: Box<Expr> },
+    /// A string literal: `"a \"b\"\n"`. The text is the value, not source:
+    /// it renders escaped, so no value can produce malformed Rust.
+    Str { value: String },
 }
 
 /// One field of a struct literal: `name: value`.
@@ -656,6 +659,10 @@ impl ToRustTokens for Expr {
                 let e = expr.to_rust_tokens();
                 quote!((*#e))
             }
+            Self::Str { value } => {
+                let lit = proc_macro2::Literal::string(value);
+                quote!(#lit)
+            }
         }
     }
 }
@@ -842,6 +849,18 @@ mod tests {
         let wrapped: TokenStream = quote!(#item);
         let f: File = parse2(quote!( #wrapped )).expect("parse file");
         unparse(&f)
+    }
+
+    #[test]
+    fn a_string_renders_escaped_and_parses_back_to_its_value() {
+        let value = "say \"hi\"\\ \n\t\u{0} é 字 }";
+        let e = Expr::Str {
+            value: value.to_string(),
+        };
+        let lit: syn::LitStr = syn::parse2(e.to_rust_tokens()).expect("a string literal");
+        assert_eq!(lit.value(), value);
+        let json = serde_json::to_string(&e).expect("json");
+        assert!(json.contains("\"kind\":\"str\""), "{json}");
     }
 
     #[test]
